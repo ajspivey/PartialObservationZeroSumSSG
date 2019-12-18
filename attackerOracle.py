@@ -59,13 +59,12 @@ class AttackerOracle(nn.Module):
         llCReLUOut = torch.cat((llCReLUOutPast,-llCReLUOutNew),0).view(2,8).unsqueeze(1)
 
         # LSTM LAYER OUTPUT
-        # piLayerLSTMOut, _ = self.piLayerLSTM(llCReLUOut)
-        # sequenceSize, batchSize, numberOfOutputFeatures = piLayerLSTMOut.size(0), piLayerLSTMOut.size(1), piLayerLSTMOut.size(2)
-        # piLayerLSTMOut = piLayerLSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
-        # piLayerLinearOut = self.piLayerLinear(piLayerLSTMOut)
-        # print(piLayerLinearOut)
-        # piLayersoftMaxOut = self.piLayerSoftmax(piLayerLinearOut)
-        # Get
+        piLayerLSTMOut, _ = self.piLayerLSTM(llCReLUOut)
+        sequenceSize, batchSize, numberOfOutputFeatures = piLayerLSTMOut.size(0), piLayerLSTMOut.size(1), piLayerLSTMOut.size(2)
+        piLayerLSTMOut = piLayerLSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
+        piLayerLinearOut = self.piLayerLinear(piLayerLSTMOut)
+        piLayersoftMaxOut = self.piLayerSoftmax(piLayerLinearOut)
+        print(piLayersoftMaxOut)
         return piLayersoftMaxOut
 
 def generateRewards(numTargets, lowBound=1, highBound = 10):
