@@ -1,8 +1,14 @@
+# ==============================================================================
+# IMPORTS
+# ==============================================================================
 from itertools import combinations
 import numpy as np
 
+# ==============================================================================
+# CLASSES
+# ==============================================================================
 class SequentialZeroSumSSG(object):
-    def __init__(self, numTargets, numResources, targetRewards):
+    def __init__(self, numTargets, numResources, targetRewards, timesteps):
         """Initialization method for oracle.
         Args:
             numTargets: The number of targets the defender must defend
@@ -14,26 +20,33 @@ class SequentialZeroSumSSG(object):
         #
         self.DEFENDER = 0
         self.ATTACKER = 1
-
         #
         # meta values
         #
         self.numTargets = numTargets
         self.numResources = numResources
         self.targetRewards = targetRewards
-        # Destroyed targets are a 0, otherwise a 1
-        self.targets = [1] * numTargets
-        # Defender placements are 0 if nothing is placed, and 1 if resources are placed.
-        self.resourcePlacements = [0] * numResources
-        # Resources are consumed if they stop an attack. This tracks remaining resources
-        self.availableResources = numResources
+        self.timesteps = timesteps
 
-        #
-        # Features
-        #
+        # Initialize internal values
+        self.restartGame()
 
+    # -------
+    # Helpers
+    # -------
+    def restartGame(self):
+        self.currentTimestep = 0
+        self.targets = [1] * self.numTargets # Destroyed targets are a 0, otherwise a 1
+        self.availableResources = self.numResources  # Resources are consumed if they stop an attack. This tracks remaining resources
+        self.previousAttackerAction = np.array([0]*self.numTargets)
+        self.previousDefenderAction = np.array([0]*self.numTargets)
+        self.previousAttackerObservation = np.array([0]*self.numTargets*4)
+        self.previousDefenderObservation = np.array([0]*self.numTargets*4)
+        self.pastAttacks = [0]*self.numTargets
+        self.pastAttackStatuses = [0]*self.numTargets
 
     def place_ones(self, size, count):
+        """ Helper function for determining valid defender actions """
         for positions in combinations(range(size), count):
             p = [0] * size
             for i in positions:
@@ -41,6 +54,7 @@ class SequentialZeroSumSSG(object):
             yield p
 
     def getValidActions(self, player):
+        """ Returns the valid actions for a player """
         # Actions are a vector of defender placements -- 0 if nothing is placed,
         # 1 if resources are placed.
         if (player == self.DEFENDER):
@@ -53,20 +67,31 @@ class SequentialZeroSumSSG(object):
                 if (self.targets[targetIndex]):
                     action = [0] * self.numTargets
                     action[targetIndex] = 1
-                    actions.append(action)
+                    if sum(np.multiply(action, self.pastAttacks)) == 0:
+                        actions.append(action)
             return actions
         raise unknownPlayerError(f"Player is not Attacker or Defender. Player {player} unknown")
 
+
+    # ---------------------
+    # Performing game steps
+    # ---------------------
     def performActions(self, defenderAction, attackerAction):
-        self.resourcePlacements = defenderAction
-        oldResourceCount = sum(self.availableResources)
-        self.availableResources = np.multiply(attackerAction,defenderAction)
-        # Target Defended
-        if oldResourceCount > self.availableResources:
-            pass
-        # Target Destroyed
-        else:
-            pass
+        """ Performs a step of the game, using the given actions """
+        self.currentTimestep += 1
+        attackStatus = 1 - sum(np.multiply(attackerAction,defenderAction))
+        attackedTarget = np.where(attackerAction==1)[0][0]
+        self.availableResources = self.availableResources - attackStatus
+        self.pastAttacks[attackedTarget] = self.currentTimestep
+        self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(attackerAction, attackStatus))
+        # Update actions and observations
+        dObservation, aObservation = self.getPlayerObservations(defenderAction, attackerAction)
+
+        self.previousAttackerObservation = aObservation
+        self.previousDefenderObservation = dObservation
+        self.previousAttackerAction = attackerAction
+        self.previousDefenderAction = defenderAction
+
     def getPlayerObservations(self, defenderAction, attackerAction):
         """
         Args:
@@ -76,8 +101,13 @@ class SequentialZeroSumSSG(object):
             A vector pair representing the attacker's observation and the defender's
             observation.
         """
-        defenderObservation = [] + defenderAction + self.resourcePlacements + self.pastAttacks + self.pastAttackStatuses + self.targetRewards
-        attackerObservation = [] + attackerAction + self.pastAttacks + self.pastAttackStatuses + self.targetRewards
+        # if self.currentTimestep == 0:
+        #     defenderObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.targetRewards))
+        #     attackerObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.targetRewards))
+        #     return (defenderObservation, attackerObservation)
+        # else:
+        defenderObservation = np.concatenate((defenderAction, self.pastAttacks, self.pastAttackStatuses, self.targetRewards))
+        attackerObservation = np.concatenate((attackerAction, self.pastAttacks, self.pastAttackStatuses, self.targetRewards))
         # Calculate the outcome of the turn
         for _ in range(self.numTargets):
             # Resource attacked & defended
@@ -87,3 +117,32 @@ class SequentialZeroSumSSG(object):
             if not defenderAction[_] and attackerAction[_]:
                 pass
         return (defenderObservation, attackerObservation)
+
+
+    # -------------
+    # Action Scores
+    # -------------
+    def getActionScore(self, player, aAction, dAction, rewards):
+        score = 0
+        for targetIndex in range(len(dAction)):
+            if aAction[targetIndex] and not dAction[targetIndex]:
+                score += rewards[targetIndex]
+        if player == self.DEFENDER:
+            score = score * -1
+        return score
+
+    def getBestActionAndScore(self, player, eAction, rewards):
+        actions = self.getValidActions(player)
+        bestAction = actions[0]
+        bestActionScore = float("-inf")
+        for action in actions:
+            dAction = action
+            aAction = eAction
+            if (player == self.ATTACKER):
+                dAction = eAction
+                aAction = action
+            actionScore = self.getActionScore(player, aAction, dAction, rewards)
+            if actionScore > bestActionScore:
+                bestActionScore = actionScore
+                bestAction = action
+        return (np.array(bestAction), bestActionScore)

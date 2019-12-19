@@ -1,3 +1,7 @@
+# ==============================================================================
+# IMPORTS
+# ==============================================================================
+# External imports
 import numpy as np
 import torch
 import torch.nn as nn
@@ -5,11 +9,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.autograd as autograd
 
+# Internal Imports
+import ssg
+
 # Set the random seed
 torch.manual_seed(1)
 np.random.seed(1)
 
-# Network definition
+# ==============================================================================
+# CLASSES
+# ==============================================================================
 class AttackerOracle(nn.Module):
     def __init__(self, targetNum, featureCount):
         super(AttackerOracle, self).__init__()
@@ -29,66 +38,143 @@ class AttackerOracle(nn.Module):
         # PI LAYER
         self.piLayerLSTM = nn.LSTM(2*featureCount, 2*targetNum*featureCount)
         self.piLayerLinear = nn.Linear(2*targetNum*featureCount, targetNum)
-        # self.piLayerReLU = nn.ReLU()
-        # self.piLayerLinear2 = nn.Linear(in?,out?)   # output should be size targetNum?
         self.piLayerSoftmax = nn.Softmax(-1)
-
-        # Q LAYER
-        # self.qLayerLSTM = nn.LSTM(in?,out?)
-        # self.qLayerLinear = nn.Linear(in?,out?)
-        # self.qLayerReLU = nn.ReLU()
-        # self.qLayerLinear2 = nn.Linear(in?,out?)    # output should be size targetNum.
-
-        # How to implement a concatReLU:
-        # >>> m = nn.ReLU()
-        # >>> input = torch.randn(2).unsqueeze(0)
-        # >>> output = torch.cat((m(input),m(-input)))
 
     # Define a forward pass of the network
     # TODO: find out when tensors need to be reshaped
     def forward(self, observation):
         # LINEAR LAYER OUTPUT (ll)
         llLinearOut = self.linearLayerLinear(observation)
-        # llLinearOut = llLinearOut.view(1,4)
-        # print(llLinearOut)
-
         # Simulates a CReLU
         llReLUOutPast, llReLUOutNew = self.linearLayerReLU(llLinearOut)
         llCReLUOutPast = torch.cat((llReLUOutPast, -llReLUOutPast),0)
         llCReLUOutNew = torch.cat((llReLUOutNew, -llReLUOutNew),0)
         llCReLUOut = torch.cat((llCReLUOutPast,-llCReLUOutNew),0).view(2,8).unsqueeze(1)
-
         # LSTM LAYER OUTPUT
         piLayerLSTMOut, _ = self.piLayerLSTM(llCReLUOut)
         sequenceSize, batchSize, numberOfOutputFeatures = piLayerLSTMOut.size(0), piLayerLSTMOut.size(1), piLayerLSTMOut.size(2)
         piLayerLSTMOut = piLayerLSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
         piLayerLinearOut = self.piLayerLinear(piLayerLSTMOut)
         piLayersoftMaxOut = self.piLayerSoftmax(piLayerLinearOut)
-        print(piLayersoftMaxOut)
         return piLayersoftMaxOut
 
+# ==============================================================================
+# FUNCTIONS
+# ==============================================================================
 def generateRewards(numTargets, lowBound=1, highBound = 10):
-    return np.random.randint(low=lowBound, high=highBound, size=numTargets)
+    return np.random.uniform(low=lowBound, high=highBound, size=numTargets)
 
+def getMixedDefenderPolicy(game, payoffs):
+    """ Generates a random defender policy for testing """
+    # [action, pastattacks, pastattackstatus, payoffs]
+    defenderPolicy = {
+    # Null round
+    tuple(np.concatenate(([0,0,0, 0,0,0, 0,0,0], payoffs))): [1,0,0],
+
+    # First round
+    tuple(np.concatenate(([1,0,0, 1,0,0, 0,0,0], payoffs))): [0,0,0],   #1
+    tuple(np.concatenate(([1,0,0, 0,1,0, 0,1,0], payoffs))): [1,0,0],   #2
+    tuple(np.concatenate(([1,0,0, 0,0,1, 0,0,1], payoffs))): [1,0,0],   #3
+
+    # Second round
+    tuple(np.concatenate(([0,0,0, 1,2,0, 0,1,0], payoffs))): [0,0,0],   #1
+    tuple(np.concatenate(([0,0,0, 1,0,2, 0,0,1], payoffs))): [0,0,0],
+
+    tuple(np.concatenate(([1,0,0, 2,1,0, 0,1,0], payoffs))): [0,0,0],   #2
+    tuple(np.concatenate(([1,0,0, 0,1,2, 0,1,2], payoffs))): [1,0,0],
+
+    tuple(np.concatenate(([1,0,0, 2,0,1, 0,0,1], payoffs))): [0,0,0],   #3
+    tuple(np.concatenate(([1,0,0, 0,2,1, 0,2,1], payoffs))): [1,0,0],
+    }
+    return defenderPolicy
+
+def getSample(game):
+    """ Generates an attacker observation from a game, as well as the true label """
+    availableActions = game.getValidActions(game.ATTACKER)
+    defenderAction = generateDefenderAction(game)
+    print(availableActions)
+    return x, y
+
+# ==============================================================================
+# MAIN
+# ==============================================================================
 def main():
+    # ==============
     # Create Network
+    # ==============
     model = AttackerOracle(3,4) # Create an attacker oracle to train on a game with 3 targets and 4 features
     lossFunction = nn.MSELoss() # Mean-squared error loss function
     optimizer = optim.Adam(model.parameters(), lr=0.1) # Adam optimizer
+    print("Model initialized")
     #      [action, past attacks, past attack status, payoffs]
     previousVector = torch.from_numpy(np.array([1,0,0, 0,0,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
     featureVector = torch.from_numpy(np.array([0,1,0, 0,2,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
     pastAndNew = torch.cat((previousVector.unsqueeze(0),featureVector.unsqueeze(0)))
     guessBeforeTraining = model(pastAndNew)
+
+    # =============
     # Train network
-    #   Each epoch
-    #       some number of times
-    #           generate random mixed defender strategy
-    #           Get prediction X
-    #           compare to actual best response Y
-    #               Error is cumulative difference in utility?
-    # Use network to show prediction
-    pass
+    # =============
+    epochs = 100
+    totalLoss = float("inf")
+
+    # Define game type
+    targets = 3
+    resources = 1
+    timesteps = 2
+
+    print("Training framework initialized: training...")
+    while totalLoss > 1e-5:
+        # Create a new game to train on
+        print(f"Avg loss for last {epochs} samples = {totalLoss}")
+        totalLoss = 0
+        for _ in range(0,epochs):
+            rewards = generateRewards(targets)
+            game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+            # Generate the mixed defender policy (randomly generated for testing)
+            mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
+            aAction = [0]*targets
+            dAction = [0]*targets
+
+            # Play a full game
+            for timestep in range(game.timesteps):
+                # Get observations
+                dObservation, aObservation = game.getPlayerObservations(dAction, aAction)
+
+                # Create model input
+                dAction = mixedDefenderPolicy[tuple(dObservation)]  # Defender action
+                oldObservation = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+                newObservation = torch.from_numpy(aObservation).float().requires_grad_(True)
+                modelInput = torch.cat((oldObservation.unsqueeze(0),newObservation.unsqueeze(0)))
+
+                # Get the guess and label
+                x = model(modelInput)   # Attacker action guess
+                y, yScore = game.getBestActionAndScore(game.ATTACKER, dAction, rewards) # Attacker action true label
+                yVarBit = np.concatenate((game.previousAttackerAction,y))
+                xVar = x.unsqueeze(1).float().requires_grad_(True)
+                yVar = torch.from_numpy(yVarBit).view(2,3).unsqueeze(1).float().requires_grad_(True)
+
+                # Calculate loss
+                loss = lossFunction(xVar, yVar) # calculate loss using MSE, the guesses, and the labels
+                totalLoss += loss.item() # Calculate cumulative loss over epoch
+
+                # optimizer gradients need to be cleared out from the last step,
+                # otherwise all backward pass gradients will be accumulated
+                optimizer.zero_grad()
+                loss.backward() # compute the gradient of the loss with respect to the parameters of the model
+                optimizer.step() # Perform a step of the optimizer based on the gradient just calculated
+
+                # Update prev observation
+                prevAObservation = aObservation
+                prevAAction = y
+
+                game.performActions(dAction, y)
+
+            # Reset the game for another round of learning (generate new game?)
+            game.restartGame()
+
+        totalLoss = totalLoss/epochs
+
 
 if __name__ == "__main__":
     main()

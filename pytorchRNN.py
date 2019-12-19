@@ -92,7 +92,7 @@ def main():
     # Create the model
     model = LSTMNetwork(input_dim, hidden_dim, output_dim)
     lossFunction = nn.MSELoss() # Mean-squared error loss function
-    optimizer = optim.Adam(model.parameters(), lr=alpha) # Adam optimizer
+    optimizer = optim.SGD(model.parameters(), lr=alpha) # Adam optimizer
 
     # Train the model
     length = 8
