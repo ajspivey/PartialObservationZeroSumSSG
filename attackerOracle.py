@@ -104,7 +104,7 @@ def main():
     # ==============
     model = AttackerOracle(3,4) # Create an attacker oracle to train on a game with 3 targets and 4 features
     lossFunction = nn.SmoothL1Loss() # Mean-squared error loss function
-    optimizer = optim.AdamW(model.parameters()) # Adam optimizer
+    optimizer = optim.RMSprop(model.parameters()) # Adam optimizer
     print("Model initialized")
     #      [action, past attacks, past attack status, payoffs]
     previousVector = torch.from_numpy(np.array([1,0,0, 0,0,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
