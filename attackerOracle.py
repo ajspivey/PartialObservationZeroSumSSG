@@ -38,7 +38,7 @@ class AttackerOracle(nn.Module):
         # PI LAYER
         self.piLayerLSTM = nn.LSTM(2*featureCount, 2*targetNum*featureCount)
         self.piLayerLinear = nn.Linear(2*targetNum*featureCount, targetNum)
-        self.piLayerSoftmax = nn.Softmax(-1)
+        self.piLayerSoftmax = nn.Sigmoid()
 
     # Define a forward pass of the network
     # TODO: find out when tensors need to be reshaped
@@ -61,7 +61,7 @@ class AttackerOracle(nn.Module):
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def generateRewards(numTargets, lowBound=1, highBound = 10):
+def generateRewards(numTargets, lowBound=1, highBound = 100):
     return np.random.uniform(low=lowBound, high=highBound, size=numTargets)
 
 def getMixedDefenderPolicy(game, payoffs):
@@ -103,8 +103,8 @@ def main():
     # Create Network
     # ==============
     model = AttackerOracle(3,4) # Create an attacker oracle to train on a game with 3 targets and 4 features
-    lossFunction = nn.MSELoss() # Mean-squared error loss function
-    optimizer = optim.Adam(model.parameters(), lr=0.1) # Adam optimizer
+    lossFunction = nn.SmoothL1Loss() # Mean-squared error loss function
+    optimizer = optim.Adagrad(model.parameters()) # Adam optimizer
     print("Model initialized")
     #      [action, past attacks, past attack status, payoffs]
     previousVector = torch.from_numpy(np.array([1,0,0, 0,0,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
@@ -115,7 +115,7 @@ def main():
     # =============
     # Train network
     # =============
-    epochs = 100
+    epochs = 10
     totalLoss = float("inf")
 
     # Define game type
@@ -123,16 +123,17 @@ def main():
     resources = 1
     timesteps = 2
 
+    rewards = generateRewards(targets)
+    game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+    # Generate the mixed defender policy (randomly generated for testing)
+    mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
+
     print("Training framework initialized: training...")
     while totalLoss > 1e-5:
         # Create a new game to train on
         print(f"Avg loss for last {epochs} samples = {totalLoss}")
         totalLoss = 0
         for _ in range(0,epochs):
-            rewards = generateRewards(targets)
-            game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
-            # Generate the mixed defender policy (randomly generated for testing)
-            mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
             aAction = [0]*targets
             dAction = [0]*targets
 
@@ -151,8 +152,9 @@ def main():
                 x = model(modelInput)   # Attacker action guess
                 y, yScore = game.getBestActionAndScore(game.ATTACKER, dAction, rewards) # Attacker action true label
                 yVarBit = np.concatenate((game.previousAttackerAction,y))
-                xVar = x.unsqueeze(1).float().requires_grad_(True)
-                yVar = torch.from_numpy(yVarBit).view(2,3).unsqueeze(1).float().requires_grad_(True)
+                xVar = x.view(2,3).squeeze(1).float().requires_grad_(True)
+                yVar = torch.from_numpy(yVarBit).view(2,3).float().requires_grad_(True)
+
 
                 # Calculate loss
                 loss = lossFunction(xVar, yVar) # calculate loss using MSE, the guesses, and the labels
@@ -164,16 +166,61 @@ def main():
                 loss.backward() # compute the gradient of the loss with respect to the parameters of the model
                 optimizer.step() # Perform a step of the optimizer based on the gradient just calculated
 
-                # Update prev observation
-                prevAObservation = aObservation
-                prevAAction = y
-
                 game.performActions(dAction, y)
 
             # Reset the game for another round of learning (generate new game?)
-            game.restartGame()
+            rewards = generateRewards(targets)
+            game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+            # Generate the mixed defender policy (randomly generated for testing)
+            mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
 
         totalLoss = totalLoss/epochs
+    print("Done with Training")
+
+    # ================
+    # Guess some stuff
+    # ================
+    print("Testing Model")
+    # test the network on 3 different games
+    targets = 3
+    resources = 1
+    timesteps = 2
+
+    for i in range (0,15):
+        print(f"Game {i}")
+        rewards = generateRewards(targets)
+        game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+        print(f"Rewards: {rewards}")
+        # Generate the mixed defender policy (randomly generated for testing)
+        mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
+
+        aAction = [0]*targets
+        dAction = [0]*targets
+
+        # Play a full game
+        for timestep in range(game.timesteps):
+            # Get observations
+            dObservation, aObservation = game.getPlayerObservations(dAction, aAction)
+
+            # Create model input
+            dAction = mixedDefenderPolicy[tuple(dObservation)]  # Defender action
+            oldObservation = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+            newObservation = torch.from_numpy(aObservation).float().requires_grad_(True)
+            modelInput = torch.cat((oldObservation.unsqueeze(0),newObservation.unsqueeze(0)))
+
+            # Get the guess and label
+            x = model(modelInput).view(2,3)[1]   # Attacker action guess
+            print(f"xValues: {x}")
+            x = x.gt(0.5).int().detach().numpy()
+            y, yScore = game.getBestActionAndScore(game.ATTACKER, dAction, rewards) # Attacker action true label
+
+            print(f"x guess: {x}")
+            print(f"y:       {y}")
+
+            game.performActions(dAction, x)
+
+        print()
+        print()
 
 
 if __name__ == "__main__":

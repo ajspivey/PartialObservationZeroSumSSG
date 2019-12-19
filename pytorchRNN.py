@@ -30,15 +30,9 @@ class LSTMNetwork(nn.Module):
         # Get the output of the linear layer
         outputLayerActivations = self.linear(lstmOut)
         # Reshape before feeding to the sigmoid (activation) layer
-        print("LINEAR OUTPUT")
-        print(outputLayerActivations)
-        print("LINEAR OUTPUT RESHAPED")
         outputLayerActivations = outputLayerActivations.view(intASize,intBSize,-1).squeeze(1)
-        print(outputLayerActivations)
         # Return the sigmoid results
         outputSigmoid = self.sigmoid(outputLayerActivations)
-        print("SIGMOID")
-        print(outputSigmoid)
         return outputSigmoid
 
 def getBinaryDict(length):
@@ -92,16 +86,16 @@ def main():
     # Create the model
     model = LSTMNetwork(input_dim, hidden_dim, output_dim)
     lossFunction = nn.MSELoss() # Mean-squared error loss function
-    optimizer = optim.SGD(model.parameters(), lr=alpha) # Adam optimizer
+    optimizer = optim.Adam(model.parameters(), lr=alpha) # Adam optimizer
 
     # Train the model
     length = 8
     binaryDict = getBinaryDict(length)
-    epochs=500
+    epochs=5#00
     print("model initialized")
     totalLoss = float("inf")
     # Train until an arbitrary accuracy
-    while totalLoss > 1e-5:
+    while totalLoss > 1:#e-5:
         print(f"Avg loss for last 500 samples = {totalLoss}")
         totalLoss = 0
 
