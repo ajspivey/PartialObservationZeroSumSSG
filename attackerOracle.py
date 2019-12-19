@@ -61,7 +61,7 @@ class AttackerOracle(nn.Module):
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def generateRewards(numTargets, lowBound=1, highBound = 100):
+def generateRewards(numTargets, lowBound=1, highBound = 10):
     return np.random.uniform(low=lowBound, high=highBound, size=numTargets)
 
 def getMixedDefenderPolicy(game, payoffs):
@@ -129,7 +129,7 @@ def main():
     mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
 
     print("Training framework initialized: training...")
-    while totalLoss > 1e-5:
+    while totalLoss > 1e-8:
         # Create a new game to train on
         print(f"Avg loss for last {epochs} samples = {totalLoss}")
         totalLoss = 0
