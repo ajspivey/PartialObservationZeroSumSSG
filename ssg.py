@@ -58,9 +58,10 @@ class SequentialZeroSumSSG(object):
         # Actions are a vector of defender placements -- 0 if nothing is placed,
         # 1 if resources are placed.
         if (player == self.DEFENDER):
-            currentResources = self.resourcePlacements
+            currentResources = self.previousDefenderAction
             allResourcePlacements = list(self.place_ones(self.numTargets, self.availableResources))
-            return [placements for placements in allResourcePlacements if sum(np.multiply(self.targets,placements)) == self.availableResources]
+            viablePlacements = [placements for placements in allResourcePlacements if sum(np.multiply(self.targets,placements)) == self.availableResources]
+            return viablePlacements + [[0] * self.numTargets]
         elif (player == self.ATTACKER):
             actions = []
             for targetIndex in range(self.numTargets):
@@ -80,7 +81,7 @@ class SequentialZeroSumSSG(object):
         """ Performs a step of the game, using the given actions """
         self.currentTimestep += 1
         attackStatus = 1 - sum(np.multiply(attackerAction,defenderAction))
-        attackedTarget = np.where(attackerAction==1)[0][0]
+        attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
         self.availableResources = self.availableResources - attackStatus
         self.pastAttacks[attackedTarget] = self.currentTimestep
         self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(attackerAction, attackStatus))
@@ -101,11 +102,6 @@ class SequentialZeroSumSSG(object):
             A vector pair representing the attacker's observation and the defender's
             observation.
         """
-        # if self.currentTimestep == 0:
-        #     defenderObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.targetRewards))
-        #     attackerObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.targetRewards))
-        #     return (defenderObservation, attackerObservation)
-        # else:
         defenderObservation = np.concatenate((defenderAction, self.pastAttacks, self.pastAttackStatuses, self.targetRewards))
         attackerObservation = np.concatenate((attackerAction, self.pastAttacks, self.pastAttackStatuses, self.targetRewards))
         # Calculate the outcome of the turn

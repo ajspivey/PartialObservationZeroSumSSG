@@ -81,19 +81,13 @@ def getMixedDefenderPolicy(game, payoffs):
     tuple(np.concatenate(([0,0,0, 1,0,2, 0,0,1], payoffs))): [0,0,0],
 
     tuple(np.concatenate(([1,0,0, 2,1,0, 0,1,0], payoffs))): [0,0,0],   #2
-    tuple(np.concatenate(([1,0,0, 0,1,2, 0,1,2], payoffs))): [1,0,0],
+    tuple(np.concatenate(([1,0,0, 0,1,2, 0,1,1], payoffs))): [1,0,0],
 
     tuple(np.concatenate(([1,0,0, 2,0,1, 0,0,1], payoffs))): [0,0,0],   #3
-    tuple(np.concatenate(([1,0,0, 0,2,1, 0,2,1], payoffs))): [1,0,0],
+    tuple(np.concatenate(([1,0,0, 0,2,1, 0,1,1], payoffs))): [1,0,0],
     }
     return defenderPolicy
 
-def getSample(game):
-    """ Generates an attacker observation from a game, as well as the true label """
-    availableActions = game.getValidActions(game.ATTACKER)
-    defenderAction = generateDefenderAction(game)
-    print(availableActions)
-    return x, y
 
 # ==============================================================================
 # MAIN
