@@ -64,6 +64,15 @@ class AttackerOracle(nn.Module):
 def generateRewards(numTargets, lowBound=1, highBound = 10):
     return np.random.uniform(low=lowBound, high=highBound, size=numTargets)
 
+def inputFromGame(game):
+    """ A curried function for creating neural net inputs from one observation """
+    def mush(observation):
+        old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+        new = torch.from_numpy(observation).float().requires_grad_(True)
+        modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+        return modelInput
+    return mush
+
 def getMixedDefenderPolicy(game, payoffs):
     """ Generates a random defender policy for testing """
     # [action, pastattacks, pastattackstatus, payoffs]
@@ -100,11 +109,6 @@ def main():
     lossFunction = nn.SmoothL1Loss() # Mean-squared error loss function
     optimizer = optim.RMSprop(model.parameters()) # Adam optimizer
     print("Model initialized")
-    #      [action, past attacks, past attack status, payoffs]
-    previousVector = torch.from_numpy(np.array([1,0,0, 0,0,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
-    featureVector = torch.from_numpy(np.array([0,1,0, 0,2,1, 0,0,1, 1.9,4.1,3.4])).float().requires_grad_(True)
-    pastAndNew = torch.cat((previousVector.unsqueeze(0),featureVector.unsqueeze(0)))
-    guessBeforeTraining = model(pastAndNew)
 
     # =============
     # Train network
@@ -119,6 +123,7 @@ def main():
 
     rewards = generateRewards(targets)
     game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+    createInput = inputFromGame(game)
     # Generate the mixed defender policy (randomly generated for testing)
     mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
 
@@ -138,12 +143,9 @@ def main():
 
                 # Create model input
                 dAction = mixedDefenderPolicy[tuple(dObservation)]  # Defender action
-                oldObservation = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-                newObservation = torch.from_numpy(aObservation).float().requires_grad_(True)
-                modelInput = torch.cat((oldObservation.unsqueeze(0),newObservation.unsqueeze(0)))
 
                 # Get the guess and label
-                x = model(modelInput)   # Attacker action guess
+                x = model(createInput(aObservation))   # Attacker action guess
                 y, yScore = game.getBestActionAndScore(game.ATTACKER, dAction, rewards) # Attacker action true label
                 yVarBit = np.concatenate((game.previousAttackerAction,y))
                 xVar = x.view(2,3).squeeze(1).float().requires_grad_(True)
@@ -165,6 +167,7 @@ def main():
             # Reset the game for another round of learning (generate new game?)
             rewards = generateRewards(targets)
             game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+            createInput = inputFromGame(game)
             # Generate the mixed defender policy (randomly generated for testing)
             mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
 
@@ -184,6 +187,7 @@ def main():
         print(f"Game {i}")
         rewards = generateRewards(targets)
         game = ssg.SequentialZeroSumSSG(targets, resources, rewards, timesteps)
+        createInput = inputFromGame(game)
         print(f"Rewards: {rewards}")
         # Generate the mixed defender policy (randomly generated for testing)
         mixedDefenderPolicy = getMixedDefenderPolicy(game, rewards)
@@ -198,12 +202,9 @@ def main():
 
             # Create model input
             dAction = mixedDefenderPolicy[tuple(dObservation)]  # Defender action
-            oldObservation = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-            newObservation = torch.from_numpy(aObservation).float().requires_grad_(True)
-            modelInput = torch.cat((oldObservation.unsqueeze(0),newObservation.unsqueeze(0)))
 
             # Get the guess and label
-            x = model(modelInput).view(2,3)[1]   # Attacker action guess
+            x = x = model(createInput(aObservation)).view(2,3)[1]   # Attacker action guess
             print(f"xValues: {x}")
             x = x.gt(0.5).int().detach().numpy()
             y, yScore = game.getBestActionAndScore(game.ATTACKER, dAction, rewards) # Attacker action true label
