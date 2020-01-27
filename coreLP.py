@@ -94,14 +94,14 @@ def main():
     aPool = ["e","f","g"]
     payMatrix = {
         ("a","e"): 1,
-        ("a","f"): 2,
-        ("a","g"): 3,
-        ("b","e"): 3,
+        ("a","f"): -1,
+        ("a","g"): 0,
+        ("b","e"): 0,
         ("b","f"): 2,
-        ("b","g"): 1,
+        ("b","g"): 0,
         ("c","e"): 2,
-        ("c","f"): 2,
-        ("c","g"): 2,
+        ("c","f"): -2,
+        ("c","g"): -1,
     }
     core, xD = CoreLP.createModel(aPool, dPool, payMatrix)
     solution = core.solve(log_output=True)
