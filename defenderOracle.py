@@ -85,7 +85,7 @@ class RandomDefenderOracle(gO.Oracle):
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, attackerPool, attackerMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.RMSprop(oracleToTrain.parameters())
 
@@ -107,8 +107,10 @@ def train(oracleToTrain, attackerPool, attackerMixedStrategy, game, epochs=10, i
 
             for timestep in range(game.timesteps):
                 # Create model input
-                attackerAgent = np.random.choice(attackerPool, 1,
-                              p=attackerMixedStrategy)[0]
+                # print(aIds)
+                # print(attackerMixedStrategy)
+                attackerAgent = aMap[np.random.choice(aIds, 1,
+                              p=attackerMixedStrategy)[0]]
                 agentInputFunction = attackerAgent.inputFromGame(game)
                 aAction = attackerAgent(agentInputFunction(aOb))
 
@@ -126,8 +128,8 @@ def train(oracleToTrain, attackerPool, attackerMixedStrategy, game, epochs=10, i
                 dOb, aOb = game.performActions(label, aAction, dOb, aOb)
             totalUtility += game.defenderUtility
             game.restartGame()
-            for attacker in attackerPool:
-                attacker.reset()
+            for aId in aIds:
+                aMap[aId].reset()
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs

@@ -20,10 +20,14 @@ def main():
     targetNum = 6
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=2, timesteps=3)
     payoutMatrix = {}
-    attackerPureStrategies = []
-    defenderPureStrategies = []
     attackerMixedStrategy = None
     defenderMixedStrategy = None
+    newDefenderId = 0
+    newAttackerId = 0
+    attackerPureIds = []
+    defenderPureIds = []
+    attackerIdMap = {}
+    defenderIdMap = {}
     print("Game created.")
 
     # Start with a 5 random attacker pure strategies and 5 random defender pure strategies
@@ -31,18 +35,23 @@ def main():
     for _ in range(5):
         attackerOracle = aO.RandomAttackerOracle(targetNum, game)
         defenderOracle = dO.RandomDefenderOracle(targetNum, game)
-        attackerPureStrategies.append(attackerOracle)
-        print(attackerPureStrategies)
-        defenderPureStrategies.append(defenderOracle)
+        attackerPureIds.append(newAttackerId)
+        defenderPureIds.append(newDefenderId)
+        attackerIdMap[newAttackerId] = attackerOracle
+        defenderIdMap[newDefenderId] = defenderOracle
+        newAttackerId += 1
+        newDefenderId += 1
     print("Strategies seeded.")
 
     # Compute the payout matrix for each pair of strategies
     print("Computing initial payout matrix for pure strategies...")
-    for pureAttacker in attackerPureStrategies:
-        for pureDefender in defenderPureStrategies:
+    for attackerId in attackerPureIds:
+        pureAttacker = attackerIdMap[attackerId]
+        for defenderId in defenderPureIds:
+            pureDefender = defenderIdMap[defenderId]
             # Run the game some amount of times
             value = ssg.getPayout(game, pureDefender, pureAttacker)
-            payoutMatrix[pureDefender,pureAttacker] = value
+            payoutMatrix[attackerId,defenderId] = value
             game.restartGame()
             pureDefender.reset()
             pureAttacker.reset()
@@ -60,13 +69,13 @@ def main():
         # ------
         # Compute the mixed defender strategy
         print("Computing defender mixed strategy...")
-        defenderModel, dStrategyDistribution = coreLP.createDefenderModel(attackerPureStrategies, defenderPureStrategies, payoutMatrix)
+        defenderModel, dStrategyDistribution = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
         defenderModel.solve()
         defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
         print("Defender mixed strategy computed.")
         # Compute the mixed attacker strategy
         print("Computing attacker mixed strategy...")
-        attackerModel, aStrategyDistribution = coreLP.createAttackerModel(attackerPureStrategies, defenderPureStrategies, payoutMatrix)
+        attackerModel, aStrategyDistribution = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
         attackerModel.solve()
         attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
         print("Attacker mixed strategy computed.")
@@ -76,36 +85,46 @@ def main():
         # Compute the defender oracle against the attacker mixed strategy
         print("Computing defender oracle...")
         defenderOracle = dO.DefenderOracle(targetNum)
-        dO.train(oracleToTrain=defenderOracle, game=game, attackerPool=attackerPureStrategies, attackerMixedStrategy=attackerMixedStrategy)
+        print("DEFENDER NUM", defenderId)
+        print("IDS:", attackerPureIds)
+        print("MIXED STRAT:", attackerMixedStrategy)
+        dO.train(oracleToTrain=defenderOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy)
         print("Defender oracle computed.")
         # Compute the attacker oracle against the defender mixed strategy
         print("Computing attacker oracle...")
         attackerOracle = aO.AttackerOracle(targetNum)
-        aO.train(oracleToTrain=attackerOracle, game=game, defenderPool=defenderPureStrategies, defenderMixedStrategy=defenderMixedStrategy)
+        aO.train(oracleToTrain=attackerOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy)
         print("Attacker oracle computed")
 
         # ------------
         # UPDATE POOLS
         # ------------
         print("Updating pools and payout matrix...")
-        print("AttackerStrategies")
-        for pureAttacker in attackerPureStrategies:
+        for attackerId in attackerPureIds:
             # Run the game some amount of times
-            value = ssg.getPayout(game, defenderOracle, pureAttacker)
-            payoutMatrix[defenderOracle,pureAttacker] = value
+            value = ssg.getPayout(game, defenderOracle, attackerIdMap[attackerId])
+            payoutMatrix[newDefenderId, attackerId] = value
             game.restartGame()
             defenderOracle.reset()
-            pureAttacker.reset()
-        print("Defender strateges")
-        for pureDefender in defenderPureStrategies:
+            attackerIdMap[attackerId].reset()
+        for defenderId in defenderPureIds:
             # Run the game some amount of times
-            value = ssg.getPayout(game, pureDefender, attackerOracle)
-            payoutMatrix[pureDefender,attackerOracle] = value
+            value = ssg.getPayout(game, defenderIdMap[defenderId], attackerOracle)
+            payoutMatrix[defenderId, newAttackerId] = value
             game.restartGame()
-            pureDefender.reset()
+            defenderIdMap[defenderId].reset()
             attackerOracle.reset()
-        attackerPureStrategies.append(attackerOracle)
-        defenderPureStrategies.append(defenderOracle)
+        value = ssg.getPayout(game, defenderOracle, attackerOracle)
+        payoutMatrix[newDefenderId, newAttackerId] = value
+        game.restartGame()
+        defenderOracle.reset()
+        attackerOracle.reset()
+        attackerPureIds.append(newAttackerId)
+        defenderPureIds.append(newDefenderId)
+        attackerIdMap[newAttackerId] = attackerOracle
+        defenderIdMap[newDefenderId] = defenderOracle
+        newAttackerId += 1
+        newDefenderId += 1
         print("Pools and payout matrix updated.")
 
         # TODO: Calculate improvement somehow. What is the end utility??

@@ -87,7 +87,7 @@ class RandomAttackerOracle(gO.Oracle):
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, defenderPool, defenderMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.RMSprop(oracleToTrain.parameters())
 
@@ -109,8 +109,8 @@ def train(oracleToTrain, defenderPool, defenderMixedStrategy, game, epochs=10, i
 
             for timestep in range(game.timesteps):
                 # Create model input
-                defenderAgent = np.random.choice(defenderPool, 1,
-                              p=defenderMixedStrategy)[0]
+                defenderAgent = dMap[np.random.choice(dIds, 1,
+                              p=defenderMixedStrategy)[0]]
                 agentInputFunction = defenderAgent.inputFromGame(game)
                 dAction = defenderAgent(agentInputFunction(dOb))
 
@@ -128,8 +128,8 @@ def train(oracleToTrain, defenderPool, defenderMixedStrategy, game, epochs=10, i
                 dOb, aOb = game.performActions(dAction, label, dOb, aOb)
             totalUtility += game.attackerUtility
             game.restartGame()
-            for defender in defenderPool:
-                defender.reset()
+            for dId in dIds:
+                dMap[dId].reset()
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs
