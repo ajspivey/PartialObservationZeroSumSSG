@@ -27,6 +27,26 @@ class AttackerOracle(gO.Oracle):
         self.targetNum = targetNum
         self.featureCount = ssg.ATTACKER_FEATURE_SIZE
 
+    # Define a forward pass of the network
+    def forward(self, observation):
+        # Linear Layer
+        linearOut = self.linearLayer(observation)
+        # CReLU
+        ReLUOld, ReLUNew = self.ReLU(linearOut)
+        CReLUOld = torch.cat((ReLUOld, -ReLUOld),0)
+        CReLUNew = torch.cat((ReLUNew, -ReLUNew),0)
+        CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.featureCount).unsqueeze(1)
+        # LSTM
+        LSTMOut, _ = self.LSTM(CReLU)
+        sequenceSize, batchSize, numberOfOutputFeatures = LSTMOut.size(0), LSTMOut.size(1), LSTMOut.size(2)
+        LSTMOut = LSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
+        # Output
+        linearOutput = self.outputLinearLayer(LSTMOut)
+        output = self.outputSoftmax(linearOutput).view(2,self.targetNum).squeeze(1).float().requires_grad_(True)[1]
+        maxValIndex = torch.argmax(output)
+        oneHot = torch.nn.functional.one_hot(maxValIndex, self.targetNum)
+        return oneHot
+
     def inputFromGame(self, game):
         def buildInput(observation):
             old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)

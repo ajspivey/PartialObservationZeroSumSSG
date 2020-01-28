@@ -32,6 +32,7 @@ def main():
         attackerOracle = aO.RandomAttackerOracle(targetNum, game)
         defenderOracle = dO.RandomDefenderOracle(targetNum, game)
         attackerPureStrategies.append(attackerOracle)
+        print(attackerPureStrategies)
         defenderPureStrategies.append(defenderOracle)
     print("Strategies seeded.")
 
@@ -103,8 +104,8 @@ def main():
             game.restartGame()
             pureDefender.reset()
             attackerOracle.reset()
-        game.addPureStrategyToPool(ssg.ATTACKER, attackerOracle)
-        game.addPureStrategyToPool(ssg.DEFENDER, defenderOracle)
+        attackerPureStrategies.append(attackerOracle)
+        defenderPureStrategies.append(defenderOracle)
         print("Pools and payout matrix updated.")
 
         # TODO: Calculate improvement somehow. What is the end utility??
