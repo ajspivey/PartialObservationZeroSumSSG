@@ -45,7 +45,7 @@ class Oracle(nn.Module):
         LSTMOut = LSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
         # Output
         linearOutput = self.outputLinearLayer(LSTMOut)
-        output = self.outputSoftmax(linearOutput)
+        output = self.outputSoftmax(linearOutput).view(2,self.targetNum).squeeze(1).float().requires_grad_(True)[1]
         return output
 
     def reset(self):
@@ -56,54 +56,3 @@ class Oracle(nn.Module):
         def mush(observation):
             return None
         return None
-
-# ==============================================================================
-# FUNCTIONS
-# ==============================================================================
-def train(oracle, player, targets, makePolicy, epochs=10, lossThreshold=1e-7, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
-    if optimizer is None:
-        optimizer = optim.RMSprop(oracle.parameters())
-
-    totalLoss = float("inf")
-    while totalLoss > lossThreshold:
-        if (showOutput):
-            print(f"Avg loss for last {epochs} samples = {totalLoss}")
-        totalLoss = 0
-        game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets)
-        inputFunction = inputFromGame(game)
-        mixedPolicy = makePolicy(defenderRewards, defenderPenalties)
-
-        for _ in range(0, epochs):
-            dAction = [0]*game.numTargets
-            aAction = [0]*game.numTargets
-            dOb, aOb = game.getEmptyObservations()
-
-            for timestep in range(game.timesteps):
-                # Create model input
-                if (player == ssg.DEFENDER):
-                    aAction = mixedPolicy[tuple(dOb)]
-                    guess = oracle(inputFunction(dOb)).view(2,3).squeeze(1).float().requires_grad_(True)
-                    dAction, _ = game.getBestActionAndScore(ssg.DEFENDER, aAction, defenderRewards, defenderPenalties)
-                    labelBit = np.concatenate((game.previousDefenderAction,dAction))
-                    label = torch.from_numpy(labelBit).view(2,3).float().requires_grad_(True)
-
-                elif(player == ssg.ATTACKER):
-                    dAction = mixedPolicy[tuple(dOb)]
-                    guess = oracle(inputFunction(aOb)).view(2,3).squeeze(1).float().requires_grad_(True)
-                    aAction, _ = game.getBestActionAndScore(ssg.ATTACKER, dAction, defenderRewards, defenderPenalties)
-                    labelBit = np.concatenate((game.previousAttackerAction,aAction))
-                    label = torch.from_numpy(labelBit).view(2,3).float().requires_grad_(True)
-
-                loss = lossFunction(guess, label)
-                totalLoss += loss.item()
-
-                optimizer.zero_grad()
-                loss.backward() # compute the gradient of the loss with respect to the parameters of the model
-                optimizer.step() # Perform a step of the optimizer based on the gradient just calculated
-
-                dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
-
-            game.restartGame()
-
-        totalLoss = totalLoss/epochs
-    return oracle

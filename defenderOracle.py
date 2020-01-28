@@ -49,7 +49,7 @@ class RandomDefenderOracle(gO.Oracle):
     def forward(self, observation):
         # Get all the valid games
         validActions = self.game.getValidActions(ssg.DEFENDER)
-        choice = self.random.choice(validActions)
+        choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
         return choice
 
     def reset(self):
@@ -66,69 +66,61 @@ class RandomDefenderOracle(gO.Oracle):
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def makeDefenderPolicy(defenderRewards, defenderPenalties):
-    """ Generates a random defender policy for testing """
-    # [action, pastattacks, pastattackstatus, payoffs]
-    attackerPolicy = {
-    # Null round
-    tuple(np.concatenate(([0,0,0, 0,0,0, 0,0,0], defenderRewards, defenderPenalties))): [1,0,0],
 
-    # First round
-    tuple(np.concatenate(([1,0,0, 1,0,0, 0,0,0], defenderRewards, defenderPenalties))): [0,1,0],   #2
-    tuple(np.concatenate(([1,0,0, 1,0,0, 1,0,0], defenderRewards, defenderPenalties))): [0,1,0],   #1
+def train(oracleToTrain, attackerPool, attackerMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+    if optimizer is None:
+        optimizer = optim.RMSprop(oracleToTrain.parameters())
 
-    # Second round
-    tuple(np.concatenate(([0,1,0, 1,2,0, 0,0,0], defenderRewards, defenderPenalties))): [0,0,1],   #1
-    tuple(np.concatenate(([0,1,0, 1,2,0, 0,1,0], defenderRewards, defenderPenalties))): [0,0,1],
+    inputFunction = oracleToTrain.inputFromGame(game)
 
-    tuple(np.concatenate(([0,1,0, 1,2,0, 0,1,0], defenderRewards, defenderPenalties))): [0,0,1],   #2
-    tuple(np.concatenate(([0,1,0, 1,2,0, 1,0,0], defenderRewards, defenderPenalties))): [0,0,1],
-    }
-    return attackerPolicy
+    totalLoss = float("inf")
+    totalUtility = 0
+    #while totalLoss > lossThreshold:
+    for _ in range(iterations):
+        if (showOutput):
+            print(f"Avg loss for last {epochs} samples = {totalLoss}")
+            print(f"Avg utility for last {epochs} samples = {totalUtility}")
+        totalLoss = 0
 
-def testOracle(oracle, numTargets, numGames=15):
-    correct = 0
-    totalGuesses = 0
-    for i in range (0, numGames):
-        game, defenderRewards, defenderPenalties = ssg.createRandomGame(numTargets)
-        createInput = gO.inputFromGame(game)
-        mixedPolicy = makeDefenderPolicy(defenderRewards, defenderPenalties)
+        for _ in range(0, epochs):
+            dAction = [0]*game.numTargets
+            aAction = [0]*game.numTargets
+            dOb, aOb = game.getEmptyObservations()
 
-        aAction = [0]*numTargets
-        dAction = [0]*numTargets
-        dOb, aOb = game.getEmptyObservations()
+            for timestep in range(game.timesteps):
+                # Create model input
+                attackerAgent = np.random.choice(attackerPool, 1,
+                              p=attackerMixedStrategy)[0]
+                agentInputFunction = attackerAgent.inputFromGame(game)
+                aAction = attackerAgent(agentInputFunction(aOb))
 
-        # Play a full game
-        for timestep in range(game.timesteps):
-            aAction = mixedPolicy[tuple(dOb)]  # Attacker action
+                guess = oracleToTrain(inputFunction(aOb))
+                dAction, _ = game.getBestActionAndScore(ssg.ATTACKER, dAction, game.defenderRewards, game.defenderPenalties)
+                label = torch.from_numpy(dAction).float().requires_grad_(True)
 
-            # Get the guess and label
-            x = oracle(createInput(aOb)).view(2,3)[1]   # Defender action guess
-            x = x.gt(0.5).int().detach().numpy()
-            y, yScore = game.getBestActionAndScore(ssg.DEFENDER, dAction, defenderRewards, defenderPenalties) # Defender action true label
-            if (np.array_equal(x,y)):
-                correct += 1
-            else:
-                print(f"Inccorect guess: {x} instead of {y}")
-            totalGuesses += 1
+                loss = lossFunction(guess, label)
+                totalLoss += loss.item()
 
-            game.performActions(x, aAction, dOb, aOb)
+                optimizer.zero_grad()
+                loss.backward() # compute the gradient of the loss with respect to the parameters of the model
+                optimizer.step() # Perform a step of the optimizer based on the gradient just calculated
 
-    print(f"Model tested. {correct}/{totalGuesses} guesses correct")
+                dOb, aOb = game.performActions(label, aAction, dOb, aOb)
+            totalUtility += game.defenderUtility
+            game.restartGame()
+            for attacker in attackerPool:
+                attacker.reset()
+
+        totalLoss = totalLoss/epochs
+        totalUtility = totalUtility/epochs
+    return oracleToTrain
 
 
 # ==============================================================================
 # MAIN
 # ==============================================================================
 def main():
-    # ==============
-    # Create Network
-    # ==============
-    numTargets = 3
-    featureCount = 5
-    oracle = gO.train(oracle=DefenderOracle(numTargets,featureCount), player=ssg.DEFENDER, targets=numTargets, makePolicy=makeDefenderPolicy, showOutput=True)
-    print("Model initialized")
-    testOracle(oracle, numTargets)
+    pass
 
 
 if __name__ == "__main__":

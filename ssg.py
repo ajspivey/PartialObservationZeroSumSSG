@@ -80,9 +80,10 @@ class SequentialZeroSumSSG(object):
     # Performing game steps
     # ---------------------
     def performActions(self, defenderAction, attackerAction, oldDOb, oldAOb):
-        # print(oldDOb)
+        defenderAction = defenderAction.detach().numpy()
+        attackerAction = attackerAction.detach().numpy()
         self.currentTimestep += 1
-        attackStatus = 1 - sum(np.multiply(attackerAction,defenderAction))
+        attackStatus = 1 - int(sum(np.multiply(attackerAction,defenderAction)))
         attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
         self.availableResources = self.availableResources - (1 - attackStatus)
         self.pastAttacks[attackedTarget] = self.currentTimestep

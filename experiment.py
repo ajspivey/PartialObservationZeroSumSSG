@@ -40,7 +40,7 @@ def main():
     for pureAttacker in attackerPureStrategies:
         for pureDefender in defenderPureStrategies:
             # Run the game some amount of times
-            value = ssg.getPayout(game, pureDefender, pureAttacker) # TODO: write this function
+            value = ssg.getPayout(game, pureDefender, pureAttacker)
             payoutMatrix[pureDefender,pureAttacker] = value
             game.restartGame()
             pureDefender.reset()
@@ -58,39 +58,54 @@ def main():
         # CORELP
         # ------
         # Compute the mixed defender strategy
+        print("Computing defender mixed strategy...")
         defenderModel, dStrategyDistribution = coreLP.createDefenderModel(attackerPureStrategies, defenderPureStrategies, payoutMatrix)
         defenderModel.solve()
         defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
+        print("Defender mixed strategy computed.")
         # Compute the mixed attacker strategy
-        attackerModel, aStrategyDistribution = coreLP.createAttackerModel(attackerPureStrategies, defenderPureStrategies, payoutMatrix) #TODO: Write this function
+        print("Computing attacker mixed strategy...")
+        attackerModel, aStrategyDistribution = coreLP.createAttackerModel(attackerPureStrategies, defenderPureStrategies, payoutMatrix)
         attackerModel.solve()
         attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
-
-        print(f"Attacker mixed strategy: {attackerMixedStrategy}")
-        print(f"Defender mixed strategy: {defenderMixedStrategy}")
+        print("Attacker mixed strategy computed.")
         # -------
         # ORACLES
         # -------
         # Compute the defender oracle against the attacker mixed strategy
-        defenderOracle = dO.DefenderOracle(targetNum, ssg.DEFENDER_FEATURE_SIZE)
-        dO.train(oracleToTrain=defenderOracle, attackerPool=game.attackerPool, attackerMixedStrategy=attackerMixedStrategy) #TODO: Write this function
+        print("Computing defender oracle...")
+        defenderOracle = dO.DefenderOracle(targetNum)
+        dO.train(oracleToTrain=defenderOracle, game=game, attackerPool=attackerPureStrategies, attackerMixedStrategy=attackerMixedStrategy)
+        print("Defender oracle computed.")
         # Compute the attacker oracle against the defender mixed strategy
-        attackerOracle = dO.AttackerOracle(targetNum, ssg.ATTACKER_FEATURE_SIZE)
-        dO.train(oracleToTrain=attackerOracle, defenderPool=game.defenderPool, defenderMixedStrategy=defenderMixedStrategy) #TODO: Write this function
+        print("Computing attacker oracle...")
+        attackerOracle = aO.AttackerOracle(targetNum)
+        aO.train(oracleToTrain=attackerOracle, game=game, defenderPool=defenderPureStrategies, defenderMixedStrategy=defenderMixedStrategy)
+        print("Attacker oracle computed")
 
         # ------------
         # UPDATE POOLS
         # ------------
-        for pureAttacker in game.attackerPool:
+        print("Updating pools and payout matrix...")
+        print("AttackerStrategies")
+        for pureAttacker in attackerPureStrategies:
             # Run the game some amount of times
-            value = ssg.getAveragePayout(game, defenderOracle, pureAttacker) # TODO: write this function
+            value = ssg.getPayout(game, defenderOracle, pureAttacker)
             payoutMatrix[defenderOracle,pureAttacker] = value
-        for pureDefender in game.defenderPool:
+            game.restartGame()
+            defenderOracle.reset()
+            pureAttacker.reset()
+        print("Defender strateges")
+        for pureDefender in defenderPureStrategies:
             # Run the game some amount of times
-            value = ssg.getAveragePayout(game, pureDefender, attackerOracle) # TODO: write this function
+            value = ssg.getPayout(game, pureDefender, attackerOracle)
             payoutMatrix[pureDefender,attackerOracle] = value
+            game.restartGame()
+            pureDefender.reset()
+            attackerOracle.reset()
         game.addPureStrategyToPool(ssg.ATTACKER, attackerOracle)
         game.addPureStrategyToPool(ssg.DEFENDER, defenderOracle)
+        print("Pools and payout matrix updated.")
 
         # TODO: Calculate improvement somehow. What is the end utility??
 
