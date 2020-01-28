@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.autograd as autograd
+from random import Random
 
 # Internal Imports
 import ssg
@@ -21,8 +22,46 @@ np.random.seed(1)
 # CLASSES
 # ==============================================================================
 class AttackerOracle(gO.Oracle):
-    def __init__(self, targetNum, featureCount):
-        super(AttackerOracle, self).__init__(targetNum, featureCount)
+    def __init__(self, targetNum):
+        super(AttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        self.targetNum = targetNum
+        self.featureCount = ssg.ATTACKER_FEATURE_SIZE
+
+    def inputFromGame(self, game):
+        def buildInput(observation):
+            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+            new = torch.from_numpy(observation).float().requires_grad_(True)
+            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+            return modelInput
+        return buildInput
+
+class RandomAttackerOracle(gO.Oracle):
+    def __init__(self, targetNum, game):
+        super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        self.targetNum = targetNum
+        self.featureCount = ssg.ATTACKER_FEATURE_SIZE
+        self.game = game
+
+        self.random = Random()
+        self.startState = self.random.getstate()
+
+    # Define a forward pass of the network
+    def forward(self, observation):
+        # Get all the valid games
+        validActions = self.game.getValidActions(ssg.ATTACKER)
+        choice = self.random.choice(validActions)
+        return choice
+
+    def reset(self):
+        self.random.setstate(self.startState)
+
+    def inputFromGame(self, game):
+        def buildInput(observation):
+            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+            new = torch.from_numpy(observation).float().requires_grad_(True)
+            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+            return modelInput
+        return buildInput
 
 # ==============================================================================
 # FUNCTIONS
@@ -79,7 +118,6 @@ def testOracle(oracle, numTargets, numGames=15):
             game.performActions(dAction, x, dOb, aOb)
 
     print(f"Model tested. {correct}/{totalGuesses} guesses correct")
-
 
 # ==============================================================================
 # MAIN

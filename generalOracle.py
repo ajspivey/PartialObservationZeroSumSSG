@@ -48,6 +48,15 @@ class Oracle(nn.Module):
         output = self.outputSoftmax(linearOutput)
         return output
 
+    def reset(self):
+        pass
+
+    def inputFromGame(game):
+        """ A curried function for creating neural net inputs from one observation """
+        def mush(observation):
+            return None
+        return None
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
@@ -98,19 +107,3 @@ def train(oracle, player, targets, makePolicy, epochs=10, lossThreshold=1e-7, op
 
         totalLoss = totalLoss/epochs
     return oracle
-
-def inputFromGame(game):
-    """ A curried function for creating neural net inputs from one observation """
-    def mush(observation):
-        old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-        new = torch.from_numpy(observation).float().requires_grad_(True)
-        modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
-        return modelInput
-    return mush
-
-def getRandomOracle(player, targetNum, featureCount):
-    # Create an Oracle
-    oracle = Oracle(targetNum, featureCount)
-    # Train it to guess valid moves
-
-    return None

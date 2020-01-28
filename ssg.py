@@ -61,7 +61,6 @@ class SequentialZeroSumSSG(object):
         # Actions are a vector of defender placements -- 0 if nothing is placed,
         # 1 if resources are placed.
         if (player == DEFENDER):
-            currentResources = self.previousDefenderAction
             allResourcePlacements = list(self.place_ones(self.numTargets, self.availableResources))
             viablePlacements = [placements for placements in allResourcePlacements if sum(np.multiply(self.targets,placements)) == self.availableResources]
             return viablePlacements + [[0] * self.numTargets]
@@ -85,7 +84,7 @@ class SequentialZeroSumSSG(object):
         self.currentTimestep += 1
         attackStatus = 1 - sum(np.multiply(attackerAction,defenderAction))
         attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
-        self.availableResources = self.availableResources - attackStatus
+        self.availableResources = self.availableResources - (1 - attackStatus)
         self.pastAttacks[attackedTarget] = self.currentTimestep
         self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(attackerAction, attackStatus))
 
@@ -108,7 +107,6 @@ class SequentialZeroSumSSG(object):
         defenderObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.defenderRewards, self.defenderPenalties))
         attackerObservation = np.concatenate(([0]*self.numTargets, [0]*self.numTargets, [0]*self.numTargets, self.defenderRewards, self.defenderPenalties))
         return (defenderObservation, attackerObservation)
-
 
     # -------------
     # Action Scores
@@ -143,14 +141,32 @@ class SequentialZeroSumSSG(object):
 # ------
 # Helper
 # ------
-def generateRewardsAndPenalties(numTargets, lowBound=1, highBound = 10):
+def generateRewardsAndPenalties(numTargets, lowBound=1, highBound = 50):
     rewards = np.random.uniform(low=lowBound, high=highBound, size=numTargets)
     penalties = np.random.uniform(low=lowBound, high=highBound, size=numTargets)
     return (rewards, penalties)
 
-def createRandomGame(targets):
+def createRandomGame(targets=5, resources=None, timesteps=None):
     defenderRewards, defenderPenalties = generateRewardsAndPenalties(targets)
-    resources = np.random.randint(1, targets-1)
-    timesteps = np.random.randint(1, targets-1)
+    if resources is None:
+        resources = np.random.randint(1, targets-1)
+    if timesteps is None:
+        timesteps = np.random.randint(1, targets-1)
     game = SequentialZeroSumSSG(targets, resources, defenderRewards, defenderPenalties, timesteps)
     return game, defenderRewards, defenderPenalties
+
+def getPayout(game, defenderStrat, attackerStrat):
+    """ Result is defender utility """
+    aInput = attackerStrat.inputFromGame(game)
+    dInput = defenderStrat.inputFromGame(game)
+    aAction = [0]*game.numTargets
+    dAction = [0]*game.numTargets
+    dOb, aOb = game.getEmptyObservations()
+
+    # Play a full game
+    for timestep in range(game.timesteps):
+        dAction = defenderStrat(dInput(dOb))
+        aAction = attackerStrat(aInput(aOb))
+        dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
+
+    return game.defenderUtility
