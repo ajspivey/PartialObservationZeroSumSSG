@@ -54,24 +54,7 @@ def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
 # MAIN
 # ==============================================================================
 def main():
-    dPool = ["a","b","c"]
-    aPool = ["e","f","g"]
-    payMatrix = {
-        ("a","e"): 1,
-        ("a","f"): -1,
-        ("a","g"): 0,
-        ("b","e"): 0,
-        ("b","f"): 2,
-        ("b","g"): 0,
-        ("c","e"): 2,
-        ("c","f"): -2,
-        ("c","g"): -1,
-    }
-    core, xD = createDefenderModel(aPool, dPool, payMatrix)
-    solution = core.solve(log_output=True)
-    core.export_as_lp(path=".\\foo")
-    print(solution)
-    print([float(value) for value in xD.values()])
+    pass
 
 if __name__ == "__main__":
     main()

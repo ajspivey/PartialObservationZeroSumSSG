@@ -85,9 +85,6 @@ def main():
         # Compute the defender oracle against the attacker mixed strategy
         print("Computing defender oracle...")
         defenderOracle = dO.DefenderOracle(targetNum)
-        print("DEFENDER NUM", defenderId)
-        print("IDS:", attackerPureIds)
-        print("MIXED STRAT:", attackerMixedStrategy)
         dO.train(oracleToTrain=defenderOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy)
         print("Defender oracle computed.")
         # Compute the attacker oracle against the defender mixed strategy

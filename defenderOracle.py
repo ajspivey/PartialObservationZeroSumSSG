@@ -107,8 +107,6 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
 
             for timestep in range(game.timesteps):
                 # Create model input
-                # print(aIds)
-                # print(attackerMixedStrategy)
                 attackerAgent = aMap[np.random.choice(aIds, 1,
                               p=attackerMixedStrategy)[0]]
                 agentInputFunction = attackerAgent.inputFromGame(game)
