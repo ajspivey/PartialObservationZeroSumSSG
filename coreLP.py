@@ -21,9 +21,8 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     # Create a cplex model
     mD = Model('defenderSolver')
     # Define the decision variables
-    vD = mD.continuous_var(name='defenderUtility')
+    vD = mD.continuous_var(name='defenderUtility')                                  # The defender utility
     xD = mD.continuous_var_dict(keys=dIds) # The distribution over the defender pool
-    # The objective function
     # Constraints
     mD.add_constraint(sum(xD.values()) == 1)
     mD.add_constraints(xVal <= 1 for xVal in xD.values())
@@ -31,7 +30,7 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mD.add_constraints(vD <= sum([xD[dId] * payoutMatrix[dId, aId] for dId in dIds]) for aId in aIds)
 
     mD.maximize(vD)
-    return mD, xD
+    return mD, xD, vD
 
 def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
     """Creates a model for solving the equilibrium of an ssg with a restricted
@@ -48,7 +47,7 @@ def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mA.add_constraints(vA <= sum([xA[aId] * payoutMatrix[dId, aId] for aId in aIds]) for dId in dIds)
 
     mA.maximize(vA)
-    return mA, xA
+    return mA, xA, vA
 
 # ==============================================================================
 # MAIN

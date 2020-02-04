@@ -87,7 +87,7 @@ class RandomAttackerOracle(gO.Oracle):
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, iterations=100, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.RMSprop(oracleToTrain.parameters())
 
@@ -133,7 +133,7 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, ite
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs
-    return oracleToTrain
+    return totalUtility, totalLoss
 
 # ==============================================================================
 # MAIN

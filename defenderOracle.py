@@ -85,14 +85,15 @@ class RandomDefenderOracle(gO.Oracle):
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, iterations=25, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, iterations=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.RMSprop(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters())
 
     inputFunction = oracleToTrain.inputFromGame(game)
 
     totalLoss = float("inf")
     totalUtility = 0
+
     #while totalLoss > lossThreshold:
     for _ in range(iterations):
         if (showOutput):
@@ -113,7 +114,7 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
                 aAction = attackerAgent(agentInputFunction(aOb))
 
                 guess = oracleToTrain(inputFunction(aOb))
-                dAction, _ = game.getBestActionAndScore(ssg.ATTACKER, dAction, game.defenderRewards, game.defenderPenalties)
+                dAction, actionValue = game.getBestActionAndScore(ssg.DEFENDER, aAction, game.defenderRewards, game.defenderPenalties)
                 label = torch.from_numpy(dAction).float().requires_grad_(True)
 
                 loss = lossFunction(guess, label)
@@ -131,7 +132,8 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs
-    return oracleToTrain
+    print(f"Defender Oracle average utility: {totalUtility}")
+    return totalUtility, totalLoss
 
 
 # ==============================================================================

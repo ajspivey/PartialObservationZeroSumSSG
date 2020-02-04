@@ -171,4 +171,43 @@ def getPayout(game, defenderStrat, attackerStrat):
         aAction = attackerStrat(aInput(aOb))
         dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
 
-    return game.defenderUtility
+    payout = game.defenderUtility
+
+    defenderStrat.reset()
+    attackerStrat.reset()
+    game.restartGame()
+
+    return payout
+
+def getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap, iterations=100):
+    """ Result is defender utility """
+    totalDefenderUtility = 0
+
+    # Play a certain number of games
+    for iteration in range(iterations):
+        aAction = [0]*game.numTargets
+        dAction = [0]*game.numTargets
+        dOb, aOb = game.getEmptyObservations()
+
+        # Play a full game
+        for timestep in range(game.timesteps):
+            # Select the observations according to the mixed strategy
+            defenderAgent = defenderIdMap[np.random.choice(defenderPureIds, 1,
+                          p=defenderMixedStrategy)[0]]
+            dAgentInputFunction = defenderAgent.inputFromGame(game)
+            dAction = defenderAgent(dAgentInputFunction(dOb))
+
+            attackerAgent = attackerIdMap[np.random.choice(attackerPureIds, 1,
+                          p=attackerMixedStrategy)[0]]
+            aAgentInputFunction = attackerAgent.inputFromGame(game)
+            aAction = attackerAgent(aAgentInputFunction(aOb))
+
+            dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
+
+        totalDefenderUtility += game.defenderUtility
+        game.restartGame()
+        for defender in defenderIdMap.values():
+            defender.reset()
+        for attacker in attackerIdMap.values():
+            attacker.reset()
+    return totalDefenderUtility/iterations
