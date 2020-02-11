@@ -19,7 +19,7 @@ def main():
     # DEBUGGING
     # =========
     showOracleTraining = False
-    showFrameworkOutput = False
+    showFrameworkOutput = True
     showUtilities = True
     showStrategies = True
 
@@ -28,7 +28,9 @@ def main():
     if showFrameworkOutput:
         print("Creating game...")
     targetNum = 6
-    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=2, timesteps=3)
+    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=2, timesteps=2)
+    if showFrameworkOutput:
+        print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
     payoutMatrix = {}
     attackerMixedStrategy = None
     defenderMixedStrategy = None
@@ -113,9 +115,9 @@ def main():
         # EVALUATION
         # ==========
         # Compute the average defender and attacker utility with the mixed strategies
-        # value = ssg.getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap)
-        # if showUtilities:
-            # print(f"Avg. D Mix against A Mix: {value}")
+        value = ssg.getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap)
+        if showUtilities:
+            print(f"Avg. D Mix against A Mix: {value}")
 
         # -------
         # ORACLES

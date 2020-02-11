@@ -61,9 +61,11 @@ class SequentialZeroSumSSG(object):
         # Actions are a vector of defender placements -- 0 if nothing is placed,
         # 1 if resources are placed.
         if (player == DEFENDER):
+            if self.availableResources == 0:
+                return + [[0] * self.numTargets]
             allResourcePlacements = list(self.place_ones(self.numTargets, self.availableResources))
             viablePlacements = [placements for placements in allResourcePlacements if sum(np.multiply(self.targets,placements)) == self.availableResources]
-            return viablePlacements + [[0] * self.numTargets]
+            return viablePlacements
         elif (player == ATTACKER):
             actions = []
             for targetIndex in range(self.numTargets):
@@ -118,7 +120,7 @@ class SequentialZeroSumSSG(object):
         for targetIndex in range(len(dAction)):
             if aAction[targetIndex] and not dAction[targetIndex]:
                 score -= defenderPenalties[targetIndex]
-            else:
+            elif aAction[targetIndex] and dAction[targetIndex]:
                 score += defenderRewards[targetIndex]
         if player == ATTACKER:
             score = score * -1
@@ -182,7 +184,6 @@ def getPayout(game, defenderStrat, attackerStrat):
 def getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap, iterations=100):
     """ Result is defender utility """
     totalDefenderUtility = 0
-
     # Play a certain number of games
     for iteration in range(iterations):
         aAction = [0]*game.numTargets

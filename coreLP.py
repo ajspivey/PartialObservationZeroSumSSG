@@ -21,7 +21,7 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     # Create a cplex model
     mD = Model('defenderSolver')
     # Define the decision variables
-    vD = mD.continuous_var(name='defenderUtility')                                  # The defender utility
+    vD = mD.continuous_var(lb=float("-inf"),name='defenderUtility')                                  # The defender utility
     xD = mD.continuous_var_dict(keys=dIds) # The distribution over the defender pool
     # Constraints
     mD.add_constraint(sum(xD.values()) == 1)
@@ -30,6 +30,8 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mD.add_constraints(vD <= sum([xD[dId] * payoutMatrix[dId, aId] for dId in dIds]) for aId in aIds)
 
     mD.maximize(vD)
+    mD.solve(log_output=True)
+    mD.export_as_lp(path="thing")
     return mD, xD, vD
 
 def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
@@ -38,13 +40,13 @@ def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
     # Create a cplex model
     mA = Model('attackerSolver')
     # Define the decision variables
-    vA = mA.continuous_var(name='attackerUtility')                                  # The attacker utility
+    vA = mA.continuous_var(lb=float("-inf"), name='attackerUtility')                                  # The attacker utility
     xA = mA.continuous_var_dict(keys=aIds) # The distribution over the attacker pool
     # Constraints
     mA.add_constraint(sum(xA.values()) == 1)
     mA.add_constraints(xVal <= 1 for xVal in xA.values())
     mA.add_constraints(xVal >= 0 for xVal in xA.values())
-    mA.add_constraints(vA <= sum([xA[aId] * payoutMatrix[dId, aId] for aId in aIds]) for dId in dIds)
+    mA.add_constraints(vA <= sum([xA[aId] * -payoutMatrix[dId, aId] for aId in aIds]) for dId in dIds)
 
     mA.maximize(vA)
     return mA, xA, vA
