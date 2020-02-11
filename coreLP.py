@@ -30,8 +30,6 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mD.add_constraints(vD <= sum([xD[dId] * payoutMatrix[dId, aId] for dId in dIds]) for aId in aIds)
 
     mD.maximize(vD)
-    mD.solve(log_output=True)
-    mD.export_as_lp(path="thing")
     return mD, xD, vD
 
 def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
