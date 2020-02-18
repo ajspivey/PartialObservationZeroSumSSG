@@ -112,6 +112,8 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
                               p=attackerMixedStrategy)[0]]
                 agentInputFunction = attackerAgent.inputFromGame(game)
                 aAction = attackerAgent(agentInputFunction(aOb))
+                maxValIndex = torch.argmax(aAction)
+                aAction = torch.nn.functional.one_hot(maxValIndex, game.numTargets)
 
                 guess = oracleToTrain(inputFunction(aOb))
                 dAction, actionValue = game.getBestActionAndScore(ssg.DEFENDER, aAction, game.defenderRewards, game.defenderPenalties)
@@ -132,7 +134,6 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs
-    print(f"Defender Oracle average utility: {totalUtility}")
     return totalUtility, totalLoss
 
 

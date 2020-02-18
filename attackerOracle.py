@@ -43,9 +43,7 @@ class AttackerOracle(gO.Oracle):
         # Output
         linearOutput = self.outputLinearLayer(LSTMOut)
         output = self.outputSoftmax(linearOutput).view(2,self.targetNum).squeeze(1).float().requires_grad_(True)[1]
-        maxValIndex = torch.argmax(output)
-        oneHot = torch.nn.functional.one_hot(maxValIndex, self.targetNum)
-        return oneHot
+        return output
 
     def inputFromGame(self, game):
         def buildInput(observation):
@@ -95,7 +93,7 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, ite
 
     totalLoss = float("inf")
     totalUtility = 0
-    #while totalLoss > lossThreshold:
+
     for _ in range(iterations):
         if (showOutput):
             print(f"Avg loss for last {epochs} samples = {totalLoss}")
