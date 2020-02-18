@@ -20,10 +20,10 @@ def main():
     # DEBUGGING
     # =========
     showOracleTraining = False
-    showFrameworkOutput = False
+    showFrameworkOutput = True
     showUtilities = False
     showStrategies = False
-    writeUtilityFile = False
+    writeUtilityFile = True
 
     # ===============
     # HyperParameters
@@ -93,6 +93,8 @@ def main():
         csvWriter = csv.writer(csvFile, delimiter=',')
         csvWriter.writerow(["Defender Utility","Attacker Utility"])
     for _ in range(100):
+        if showFrameworkOutput:
+            print(f"iteration {_} of 100")
         # ------
         # CORELP
         # ------
@@ -129,7 +131,7 @@ def main():
             print("Computing defender oracle...")
         defenderOracle = dO.DefenderOracle(targetNum)
         dOracleUtility, dOracleLoss = dO.train(oracleToTrain=defenderOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, showOutput=showOracleTraining)
-        ssg.testDefenderOracle(game, defenderOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, 100, defenderIdMap)
+        # ssg.testDefenderOracle(game, defenderOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, 100, defenderIdMap)
         if showFrameworkOutput:
             print("Defender oracle computed.")
         # Compute the attacker oracle against the defender mixed strategy
@@ -137,7 +139,7 @@ def main():
             print("Computing attacker oracle...")
         attackerOracle = aO.AttackerOracle(targetNum)
         aOracleUtility, aOracleLoss = aO.train(oracleToTrain=attackerOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, showOutput=showOracleTraining)
-        ssg.testAttackerOracle(game, attackerOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, 100, attackerIdMap)
+        # ssg.testAttackerOracle(game, attackerOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, 100, attackerIdMap)
         if showFrameworkOutput:
             print("Attacker oracle computed")
         if showStrategies:
