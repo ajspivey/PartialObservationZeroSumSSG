@@ -1,3 +1,18 @@
+# ======
+# @TODO:
+# ======
+# Refactor ssg to only have defender Utility
+# Refactor player to 1/-1 instead of 0/1
+# Generalize attacker/defender specific functions
+# Remove unused functions
+# Get rid of "generalOracle"
+# Standardize function parameter orders
+# Recomment
+# Add docstrings to functions
+# Clean up whitespace/make flow of functions clear
+# Create functions in experiment file?
+
+
 # =======
 # IMPORTS
 # =======
@@ -20,10 +35,10 @@ def main():
     # DEBUGGING
     # =========
     showOracleTraining = False
-    showFrameworkOutput = True
+    showFrameworkOutput = False
     showUtilities = False
     showStrategies = False
-    writeUtilityFile = True
+    writeUtilityFile = False
 
     # ===============
     # HyperParameters
@@ -37,6 +52,11 @@ def main():
     if showFrameworkOutput:
         print("Creating game...")
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
+
+    # Used to do consistent testing and comparisons
+    defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606,  8.19103865,  5.52459114]
+    defenderPenalties = [10.12675036, 17.93247563, 20.44160624, 27.40201997, 21.54053121, 34.57575552]
+
     if showFrameworkOutput:
         print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
     payoutMatrix = {}
@@ -84,14 +104,12 @@ def main():
 
 
     # Keep iterating as long as our score is improving by some threshold
-    totalDefenderUtility = 0
-    improvement = float('inf')
     if showFrameworkOutput:
         print("Beginning iteration:\n")
     if writeUtilityFile:
         csvFile = open("utilities.csv", "w", newline='')
         csvWriter = csv.writer(csvFile, delimiter=',')
-        csvWriter.writerow(["Defender Utility","Attacker Utility"])
+        csvWriter.writerow(["Defender Mixed Utility","Attacker Mixed Utility", "Defender Oracle Utility", "Attacker Oracle Utility", "Avg. Defender Oracle Utility vs Mixed", "Defender Oracle Correctness vs perfect play", "Avg Score of Best Defender Pure Strategy", "Avg. Attacker Oracle Utility vs Mixed", "Attacker Oracle Correctness vs perfect play", "Avg Score of Best Attacker Pure Strategy"])
     for _ in range(100):
         if showFrameworkOutput:
             print(f"iteration {_} of 100")
@@ -117,21 +135,27 @@ def main():
         if showFrameworkOutput:
             print("Attacker mixed strategy computed.")
 
-        # ==========
-        # EVALUATION
-        # ==========
-        # Compute the average defender and attacker utility with the mixed strategies
-        value = ssg.getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap)
-
         # -------
         # ORACLES
         # -------
+        # Determine the best utility oracle we have against the attacker mixed strategy
+        if showFrameworkOutput:
+            print("Finding highest utility defender oracle")
+        bestDOracle = None
+        bestDUtility = 0
+        for
+
         # Compute the defender oracle against the attacker mixed strategy
         if showFrameworkOutput:
             print("Computing defender oracle...")
         defenderOracle = dO.DefenderOracle(targetNum)
-        dOracleUtility, dOracleLoss = dO.train(oracleToTrain=defenderOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, showOutput=showOracleTraining)
-        # ssg.testDefenderOracle(game, defenderOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, 100, defenderIdMap)
+        dO.train(oracleToTrain=defenderOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, showOutput=showOracleTraining)
+        parameters = defenderOracle.getState()
+        cloneOracle = dO.DefenderOracle(targetNum)
+        cloneOracle.setState(parameters)
+        ssg.compareOracles(game, defenderOracle, cloneOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy)
+
+        testedDUtility, testedDCor, testedDBestOpponent = ssg.testDefenderOracle(game, defenderOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, 100, defenderIdMap)
         if showFrameworkOutput:
             print("Defender oracle computed.")
         # Compute the attacker oracle against the defender mixed strategy
@@ -139,7 +163,7 @@ def main():
             print("Computing attacker oracle...")
         attackerOracle = aO.AttackerOracle(targetNum)
         aOracleUtility, aOracleLoss = aO.train(oracleToTrain=attackerOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, showOutput=showOracleTraining)
-        # ssg.testAttackerOracle(game, attackerOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, 100, attackerIdMap)
+        testedAUtility, testedACor, testedABestOpponent = ssg.testAttackerOracle(game, attackerOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, 100, attackerIdMap)
         if showFrameworkOutput:
             print("Attacker oracle computed")
         if showStrategies:
@@ -152,12 +176,10 @@ def main():
             print()
             print(f"D Mixed Utility: {dUtility}")
             print(f"A Mixed Utility: {aUtility}")
-            print(f"Avg. D Mixed against A Mixed: {value}")
-            print(f"Avg. A Mixed against D Mixed: {-value}")
             print(f"D Oracle utility (Should be > avg Mixed): {dOracleUtility}")
             print(f"A Oracle utility (Should be > avg Mixed): {aOracleUtility}")
         if writeUtilityFile:
-            csvWriter.writerow([f"{dUtility}",f"{aUtility}"])
+            csvWriter.writerow([f"{dUtility}",f"{aUtility}",f"{dOracleUtility}",f"{aOracleUtility}",f"{testedDUtility}",f"{testedDCor}",f"{testedDBestOpponent}",f"{testedAUtility}",f"{testedACor}",f"{testedABestOpponent}",])
 
         # ------------
         # UPDATE POOLS

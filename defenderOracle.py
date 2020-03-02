@@ -53,6 +53,14 @@ class DefenderOracle(gO.Oracle):
             return modelInput
         return buildInput
 
+    def setState(self, state):
+        if state is not None:
+            self.load_state_dict(state, strict=True)
+
+    def getState(self):
+        state = self.state_dict()
+        return state
+
 class RandomDefenderOracle(gO.Oracle):
     def __init__(self, targetNum, game):
         super(RandomDefenderOracle, self).__init__(targetNum, ssg.DEFENDER_FEATURE_SIZE)
@@ -81,11 +89,70 @@ class RandomDefenderOracle(gO.Oracle):
             return modelInput
         return buildInput
 
+    def getState(self):
+        return None
+
+    def setState(self, state):
+        pass
+
+class UniformDefenderOracle(gO.Oracle):
+    def __init__(self, targetNum, game):
+        super(RandomDefenderOracle, self).__init__(targetNum, ssg.DEFENDER_FEATURE_SIZE)
+        self.targetNum = targetNum
+        self.featureCount = ssg.DEFENDER_FEATURE_SIZE
+        self.game = game
+
+        self.random = Random()
+
+    # Define a forward pass of the network
+    def forward(self, observation):
+        # Get all the valid games
+        validActions = self.game.getValidActions(ssg.DEFENDER)
+        choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
+        return choice
+
+    def inputFromGame(self, game):
+        def buildInput(observation):
+            old = torch.from_numpy(game.previousDefenderObservation).float().requires_grad_(True)
+            new = torch.from_numpy(observation).float().requires_grad_(True)
+            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+            return modelInput
+        return buildInput
+
+    def getState(self):
+        state = self.state_dict()
+        return None
+
+    def setState(self, state):
+        pass
+
+# class NashDefenderOracle(gO.Oracle):
+#     def __init__(self, targetNum, game):
+#         super(RandomDefenderOracle, self).__init__(targetNum, ssg.DEFENDER_FEATURE_SIZE)
+#         self.targetNum = targetNum
+#         self.featureCount = ssg.DEFENDER_FEATURE_SIZE
+#         self.game = game
+#
+#     # Define a forward pass of the network
+#     def forward(self, observation):
+#         # Get all the valid games
+#         validActions = self.game.getValidActions(ssg.DEFENDER)
+#         # Find the nash action
+#         return choice
+#
+#     def inputFromGame(self, game):
+#         def buildInput(observation):
+#             old = torch.from_numpy(game.previousDefenderObservation).float().requires_grad_(True)
+#             new = torch.from_numpy(observation).float().requires_grad_(True)
+#             modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+#             return modelInput
+#         return buildInput
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, iterations=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, alpha=0.15, epochs=10, iterations=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
 
@@ -93,6 +160,9 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
 
     totalLoss = float("inf")
     totalUtility = 0
+
+    uniformStrategy = [1/len(attackerMixedStrategy)] * len(attackerMixedStrategy)
+    distributions = [attackerMixedStrategy, uniformStrategy]
 
     #while totalLoss > lossThreshold:
     for _ in range(iterations):
@@ -106,11 +176,16 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
             aAction = [0]*game.numTargets
             dOb, aOb = game.getEmptyObservations()
 
+            # Choose whether to use the uniform distribution (explore) or the mixed distribution
+            # distributionChoice = np.random.choice([0,1], 1, p=[1-alpha, alpha])[0]
+            # distribution = distributions[distributionChoice]
+            distribution = attackerMixedStrategy
+
+            attackerAgent = aMap[np.random.choice(aIds, 1,
+            p=distribution)[0]]
+            agentInputFunction = attackerAgent.inputFromGame(game)
+
             for timestep in range(game.timesteps):
-                # Create model input
-                attackerAgent = aMap[np.random.choice(aIds, 1,
-                              p=attackerMixedStrategy)[0]]
-                agentInputFunction = attackerAgent.inputFromGame(game)
                 aAction = attackerAgent(agentInputFunction(aOb))
                 maxValIndex = torch.argmax(aAction)
                 aAction = torch.nn.functional.one_hot(maxValIndex, game.numTargets)
@@ -134,8 +209,6 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, epochs=10, ite
 
         totalLoss = totalLoss/epochs
         totalUtility = totalUtility/epochs
-    return totalUtility, totalLoss
-
 
 # ==============================================================================
 # MAIN

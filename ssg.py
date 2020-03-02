@@ -217,55 +217,25 @@ def getPayout(game, defenderStrat, attackerStrat):
 
     return payout
 
-def getAveragePayout(game, defenderMixedStrategy, defenderPureIds, defenderIdMap, attackerMixedStrategy, attackerPureIds, attackerIdMap, iterations=100):
-    """ Result is defender utility """
-    totalDefenderUtility = 0
-    # Play a certain number of games
-    for iteration in range(iterations):
-        aAction = [0]*game.numTargets
-        dAction = [0]*game.numTargets
-        dOb, aOb = game.getEmptyObservations()
-
-        # Play a full game
-        for timestep in range(game.timesteps):
-            # Select the observations according to the mixed strategy
-            defenderAgent = defenderIdMap[np.random.choice(defenderPureIds, 1,
-                          p=defenderMixedStrategy)[0]]
-            dAgentInputFunction = defenderAgent.inputFromGame(game)
-            dAction = defenderAgent(dAgentInputFunction(dOb))
-            dAction = game.makeLegalDefenderMove(dAction)
-
-            attackerAgent = attackerIdMap[np.random.choice(attackerPureIds, 1,
-                          p=attackerMixedStrategy)[0]]
-            aAgentInputFunction = attackerAgent.inputFromGame(game)
-            aAction = attackerAgent(aAgentInputFunction(aOb))
-            aAction = game.makeLegalAttackerMove(aAction)
-
-            dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
-
-        totalDefenderUtility += game.defenderUtility
-        game.restartGame()
-        for defender in defenderIdMap.values():
-            defender.reset()
-        for attacker in attackerIdMap.values():
-            attacker.reset()
-    return totalDefenderUtility/iterations
-
 def testAttackerOracle(game, oracle, ids, map, mix, iterations, aMap):
     print(f"TESTING ATTACKER ORACLE AGAINST MIXED DEFENDER")
     oracleUtility = 0
     correctness = 0
+    # print(f"Defender Dist: {mix}")
     # Get an average utility for this oracle
     for iteration in range(iterations):
         aAction = [0]*game.numTargets
         dAction = [0]*game.numTargets
         dOb, aOb = game.getEmptyObservations()
+
+        # Select the observations according to the mixed strategy
+        choice = np.random.choice(ids, 1, p=mix)[0]
+        # print(f"Chosen defender agent: {choice}")
+        defenderAgent = map[choice]
+        dAgentInputFunction = defenderAgent.inputFromGame(game)
+
         # Play a full game
         for timestep in range(game.timesteps):
-            # Select the observations according to the mixed strategy
-            choice = np.random.choice(ids, 1, p=mix)[0]
-            defenderAgent = map[choice]
-            dAgentInputFunction = defenderAgent.inputFromGame(game)
             dAction = defenderAgent(dAgentInputFunction(dOb))
             dAction = game.makeLegalDefenderMove(dAction)
             aAgentInputFunction = oracle.inputFromGame(game)
@@ -287,7 +257,7 @@ def testAttackerOracle(game, oracle, ids, map, mix, iterations, aMap):
         oracle.reset()
     oracleUtility = oracleUtility / iterations
     correctness = correctness / (iterations*game.timesteps)
-    print(f"Correctness: {correctness}")
+    # print(f"Correctness: {correctness}")
     # Find the best average utility out of the other pure strategies
     avgs = []
     aIndex = 1
@@ -299,13 +269,15 @@ def testAttackerOracle(game, oracle, ids, map, mix, iterations, aMap):
             aAction = [0]*game.numTargets
             dAction = [0]*game.numTargets
             dOb, aOb = game.getEmptyObservations()
+
+            # Select the observations according to the mixed strategy
+            choice = np.random.choice(ids, 1,
+            p=mix)[0]
+            defenderAgent = map[choice]
+            dAgentInputFunction = defenderAgent.inputFromGame(game)
+
             # Play a full game
             for timestep in range(game.timesteps):
-                # Select the observations according to the mixed strategy
-                choice = np.random.choice(ids, 1,
-                              p=mix)[0]
-                defenderAgent = map[choice]
-                dAgentInputFunction = defenderAgent.inputFromGame(game)
                 dAction = defenderAgent(dAgentInputFunction(dOb))
                 dAction = game.makeLegalDefenderMove(dAction)
                 aAgentInputFunction = attacker.inputFromGame(game)
@@ -321,26 +293,101 @@ def testAttackerOracle(game, oracle, ids, map, mix, iterations, aMap):
         # print(f"attacker {aIndex} avg against defender: {avgUtility}")
         aIndex += 1
         avgs.append(avgUtility)
-    print(f"Avg A oracle Utility against defender mix: {oracleUtility}")
-    print(f"best average -- {max(avgs)}")
+    # print(f"Avg A oracle Utility against defender mix: {oracleUtility}")
+    # print(f"best average -- {max(avgs)}")
+    return oracleUtility, correctness, max(avgs)
+
+def getBestOracle(game, ids, map, mix, oracleList, iterations=100):
+    bestUtility = 0
+    bestOracle = None
+    for oracle in oracleList:
+        avgUtility = 0
+        for iteration in range(iterations):
+            playerAction = [0]*game.numTargets
+            enemyAction = [0]*game.numTargets
+            pOb, eOb = game.getEmptyObservations()
+
+            choice = np.random.choice(ids, 1,
+            p=mix)[0]
+            eAgent = map[choice]
+            eAgentIn = eAgent.inputFromGame(game)
+
+            # Play a full game
+            for timestep in range(game.timesteps):
+                aAction = attackerAgent(aAgentInputFunction(aOb))
+                aAction = game.makeLegalAttackerMove(aAction)
+                dAgentInputFunction = defender.inputFromGame(game)
+                dAction = defender(dAgentInputFunction(dOb))
+                pAction = game.makeLegalMove(playerpAction)
+                pOb, eOb = game.performActions(player, pAction, eAction, pOb, eOb)
+            avgUtility += game.defenderUtility
+            game.restartGame()
+            for attacker in map.values():
+                attacker.reset()
+            defender.reset()
+        avgUtility = avgUtility / iterations
+        # print(f"defender {dIndex} avg against attacker: {avgUtility}")
+        dIndex += 1
+        avgs.append(avgUtility)
+    return # Return the max defender average -- max with tuples?
+
+def compareOracles(game, oracle, clone, ids, map, mix):
+    aAction = [0]*game.numTargets
+    dAction = [0]*game.numTargets
+    dOb, aOb = game.getEmptyObservations()
+    choice = np.random.choice(ids, 1, p=mix)[0]
+    attackerAgent = map[choice]
+    aAgentInputFunction = attackerAgent.inputFromGame(game)
+
+    for timestep in range(game.timesteps):
+        aAction = attackerAgent(aAgentInputFunction(aOb))
+        aAction = game.makeLegalAttackerMove(aAction)
+
+        dAgentInputFunction = oracle.inputFromGame(game)
+        dAction = oracle(dAgentInputFunction(dOb))
+        cloneAction = clone(dAgentInputFunction(dOb))
+        print(f"oracleAction: {dAction}")
+        print(f"cloneAction: {cloneAction}")
+        print()
+
+        dAction = game.makeLegalDefenderMove(dAction)
+        cloneAction = game.makeLegalDefenderMove(cloneAction)
+        print(f"finalized oracle action: {dAction}")
+        print(f"finalized clone action: {cloneAction}")
+
+        compareOracle = dAction.detach().numpy()
+        compareClone = cloneAction.detach().numpy()
+        if not np.array_equal(compareOracle,compareClone):
+            print(f"INCORRECT: {compareOracle}\n{compareClone}")
+
+        dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
+        print("\n\n")
+    oracleUtility += game.defenderUtility
+    game.restartGame()
+    for attacker in map.values():
+        attacker.reset()
+    oracle.reset()
 
 def testDefenderOracle(game, oracle, ids, map, mix, iterations, dMap):
     oracleUtility = 0
     correctness = 0
     print(f"TESTING DEFENDER ORACLE AGAINST MIXED ATTACKER")
     # Get an average utility for this oracle
+    # print(f"attacker Dist: {mix}")
     for iteration in range(iterations):
         aAction = [0]*game.numTargets
         dAction = [0]*game.numTargets
         dOb, aOb = game.getEmptyObservations()
         # Play a full game
         # print(f"game: {iteration}")
+        # Select the observations according to the mixed strategy
+        choice = np.random.choice(ids, 1, p=mix)[0]
+        # print(f"Chosen attacker agent: {choice}")
+        attackerAgent = map[choice]
+        aAgentInputFunction = attackerAgent.inputFromGame(game)
+
         for timestep in range(game.timesteps):
             # print(f"Timestep: {timestep}")
-            # Select the observations according to the mixed strategy
-            choice = np.random.choice(ids, 1, p=mix)[0]
-            attackerAgent = map[choice]
-            aAgentInputFunction = attackerAgent.inputFromGame(game)
             aAction = attackerAgent(aAgentInputFunction(aOb))
             aAction = game.makeLegalAttackerMove(aAction)
             dAgentInputFunction = oracle.inputFromGame(game)
@@ -362,38 +409,6 @@ def testDefenderOracle(game, oracle, ids, map, mix, iterations, dMap):
         oracle.reset()
     oracleUtility = oracleUtility / iterations
     correctness = correctness / (iterations*game.timesteps)
-    print(f"Correctness: {correctness}")
-    # Find the best average utility out of the other pure strategies
-    avgs = []
-    dIndex = 1
-    dLen = len(dMap.values())
-    for defender in dMap.values():
-        # print(f"Working with defender {dIndex} out of {dLen}")
-        avgUtility = 0
-        for iteration in range(iterations):
-            aAction = [0]*game.numTargets
-            dAction = [0]*game.numTargets
-            dOb, aOb = game.getEmptyObservations()
-            # Play a full game
-            for timestep in range(game.timesteps):
-                choice = np.random.choice(ids, 1,
-                              p=mix)[0]
-                attackerAgent = map[choice]
-                aAgentInputFunction = attackerAgent.inputFromGame(game)
-                aAction = attackerAgent(aAgentInputFunction(aOb))
-                aAction = game.makeLegalAttackerMove(aAction)
-                dAgentInputFunction = defender.inputFromGame(game)
-                dAction = defender(dAgentInputFunction(dOb))
-                dAction = game.makeLegalDefenderMove(dAction)
-                dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
-            avgUtility += game.defenderUtility
-            game.restartGame()
-            for attacker in map.values():
-                attacker.reset()
-            defender.reset()
-        avgUtility = avgUtility / iterations
-        # print(f"defender {dIndex} avg against attacker: {avgUtility}")
-        dIndex += 1
-        avgs.append(avgUtility)
-    print(f"Avg D oracle Utility against defender mix: {oracleUtility}")
-    print(f"best average -- {max(avgs)}")
+    # print(f"Correctness: {correctness}")
+    # print(f"Avg D oracle Utility against defender mix: {oracleUtility}")
+    return oracleUtility, correctness

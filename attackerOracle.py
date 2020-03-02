@@ -81,11 +81,59 @@ class RandomAttackerOracle(gO.Oracle):
             return modelInput
         return buildInput
 
+class UniformAttackerOracle(gO.Oracle):
+    def __init__(self, targetNum, game):
+        super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        self.targetNum = targetNum
+        self.featureCount = ssg.ATTACKER_FEATURE_SIZE
+        self.game = game
+
+        self.random = Random()
+
+    # Define a forward pass of the network
+    def forward(self, observation):
+        # Get all the valid games
+        validActions = self.game.getValidActions(ssg.ATTACKER)
+        choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
+        return choice
+
+    def inputFromGame(self, game):
+        def buildInput(observation):
+            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+            new = torch.from_numpy(observation).float().requires_grad_(True)
+            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+            return modelInput
+        return buildInput
+
+class NashAttackerOracle(gO.Oracle):
+    def __init__(self, targetNum, game):
+        super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        self.targetNum = targetNum
+        self.featureCount = ssg.ATTACKER_FEATURE_SIZE
+        self.game = game
+
+        self.random = Random()
+
+    # Define a forward pass of the network
+    def forward(self, observation):
+        # Get all the valid games
+        validActions = self.game.getValidActions(ssg.ATTACKER)
+        choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
+        return choice
+
+    def inputFromGame(self, game):
+        def buildInput(observation):
+            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+            new = torch.from_numpy(observation).float().requires_grad_(True)
+            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+            return modelInput
+        return buildInput
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, iterations=100, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, iterations=100, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.RMSprop(oracleToTrain.parameters())
 
@@ -93,6 +141,9 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, ite
 
     totalLoss = float("inf")
     totalUtility = 0
+
+    uniformStrategy = [1/len(defenderMixedStrategy)] * len(defenderMixedStrategy)
+    distributions = [defenderMixedStrategy, uniformStrategy]
 
     for _ in range(iterations):
         if (showOutput):
@@ -105,11 +156,16 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, epochs=10, ite
             aAction = [0]*game.numTargets
             dOb, aOb = game.getEmptyObservations()
 
+            # Choose whether to use the uniform distribution (explore) or the mixed distribution
+            # distributionChoice = np.random.choice([0,1], 1, p=[1-alpha, alpha])[0]
+            # distribution = distributions[distributionChoice]
+            distribution = defenderMixedStrategy
+
+            defenderAgent = dMap[np.random.choice(dIds, 1,
+            p=distribution)[0]]
+            agentInputFunction = defenderAgent.inputFromGame(game)
+
             for timestep in range(game.timesteps):
-                # Create model input
-                defenderAgent = dMap[np.random.choice(dIds, 1,
-                              p=defenderMixedStrategy)[0]]
-                agentInputFunction = defenderAgent.inputFromGame(game)
                 dAction = defenderAgent(agentInputFunction(dOb))
 
                 guess = oracleToTrain(inputFunction(aOb))
