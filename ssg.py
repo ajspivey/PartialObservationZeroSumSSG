@@ -5,6 +5,7 @@ from itertools import combinations
 import numpy as np
 import random
 import torch
+from torch.autograd import Variable
 
 np.random.seed(1)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -110,27 +111,29 @@ class SequentialZeroSumSSG(object):
         """
         # Determine who is attacker and who is defender
         if (player == DEFENDER):
-            defenderAction = playerAction.detach().numpy()
-            attackerAction = enemyAction.detach().numpy()
+            defenderAction = playerAction
+            attackerAction = enemyAction
             oldDOb = oldPOb
             oldAOb = oldEOb
         else:
-            attackerAction = playerAction.detach().numpy()
-            defenderAction = enemyAction.detach().numpy()
+            attackerAction = playerAction
+            defenderAction = enemyAction
             oldAOb = oldPOb
             oldDOb = oldEOb
+        dANumpy = defenderAction.clone().detach().numpy()
+        aANumpy = attackerAction.clone().detach().numpy()
 
         self.currentTimestep += 1
-        attackStatus = 1 - int(sum(np.multiply(attackerAction,defenderAction)))
-        attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
+        attackStatus = 1 - int(sum(np.multiply(aANumpy,dANumpy)))
+        attackedTarget = np.where(np.array(aANumpy)==1)[0][0]
         self.availableResources = self.availableResources - (1 - attackStatus)
         self.pastAttacks[attackedTarget] = self.currentTimestep
-        self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(attackerAction, attackStatus))
+        self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(aANumpy, attackStatus))
 
         # Update actions and observations
         self.previousAttackerObservation = oldAOb
         self.previousDefenderObservation = oldDOb
-        dObservation = np.concatenate((defenderAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
+        dObservation = np.concatenate((dANumpy, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
         aObservation = np.concatenate((attackerAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
         self.previousAttackerAction = attackerAction
         self.previousDefenderAction = defenderAction
@@ -170,13 +173,12 @@ class SequentialZeroSumSSG(object):
         else:
             aAction = pAction
             dAction = eAction
-        score = 0
-        for targetIndex in range(len(dAction)):
-            if aAction[targetIndex] and not dAction[targetIndex]:
-                score -= defenderPenalties[targetIndex]
-            elif aAction[targetIndex] and dAction[targetIndex]:
-                score += defenderRewards[targetIndex]
-        return score * player
+        defenderReward = (dAction * aAction * defenderRewards).sum(0,keepdim=True)
+        defenderPenalty = (dAction * aAction * defenderPenalties).sum(0,keepdim=True) - (aAction * defenderPenalties).sum(0,keepdim=True)
+        score = defenderReward + defenderPenalty
+        if player == ATTACKER:
+            score = score * -1
+        return score
 
     # --------------------------------------------------------------------------
     def getBestActionAndScore(self, player, eAction, defenderRewards, defenderPenalties):
@@ -188,12 +190,8 @@ class SequentialZeroSumSSG(object):
         bestAction = actions[0]
         bestActionScore = float("-inf")
         for action in actions:
-            dAction = action
-            aAction = eAction
-            if (player == ATTACKER):
-                dAction = eAction
-                aAction = action
-            actionScore = self.getActionScore(player, aAction, dAction, defenderRewards, defenderPenalties)
+            actionScore = self.getActionScore(player, torch.tensor(action), eAction, defenderRewards, defenderPenalties)
+
             if actionScore > bestActionScore:
                 bestActionScore = actionScore
                 bestAction = action
@@ -204,29 +202,28 @@ class SequentialZeroSumSSG(object):
         """
         Returns a move for the given player, modified to be legal
         """
-        moveToPrune = action.detach().numpy()
+        moveToPrune = action
         prunedMove = None
-        # Zero out any actions that are impossible and re-normalize
+        # Zero out any actions that are impossible
         if player == DEFENDER:
-            for targetIndex in range(len(moveToPrune)):
-                if self.pastAttackStatuses[targetIndex]:
-                    moveToPrune[targetIndex] = 0
+            moveToPrune = moveToPrune * torch.tensor(np.ones(len(self.pastAttackStatuses)) - self.pastAttackStatuses)
             # Pick the highest n remaining values, where n is the number of resources left
-            highest = np.argpartition(moveToPrune, -self.availableResources)[-self.availableResources:]
-            if len(highest) == self.availableResources:
-                for targetIndex in range(len(moveToPrune)):
-                    if targetIndex in highest:
-                        moveToPrune[targetIndex] = 1
-                    else:
-                        moveToPrune[targetIndex] = 0
+            topKValues, indices = moveToPrune.topk(self.availableResources)
+            zeroes = torch.zeros((self.numTargets),dtype=torch.float64)
+            if len(topKValues) == self.availableResources:
+                scattered = zeroes.scatter(0, indices, topKValues)
+                prunedMove = scattered
+                # prunedMove = torch.sign(scattered)
+                print(prunedMove)
             else:
-                moveToPrune = np.array([0] * self.numTargets)
-            prunedMove = torch.from_numpy(moveToPrune)
+                prunedMove = zeroes
+
+
         else:
             for targetIndex in range(len(moveToPrune)):
                 if self.pastAttackStatuses[targetIndex]:
                     moveToPrune[targetIndex] = 0
-            maxValIndex = torch.argmax(torch.from_numpy(moveToPrune))
+            maxValIndex = torch.argmax(moveToPrune)
             prunedMove = torch.nn.functional.one_hot(maxValIndex, self.numTargets)
         return prunedMove
 
@@ -260,8 +257,7 @@ class SequentialZeroSumSSG(object):
     # --------------------------------------------------------------------------
     def getOracleScore(self, player, ids, map, mix, oracle, iterations=100):
         """
-        Returns the oracle in the list with the highest utility against the mixed
-        strategy specified, and its utility
+        Returns the utility of an oracle vs. a mixed strategy
         """
         bestUtility = None
         bestOracle = None
@@ -327,8 +323,8 @@ def generateRewardsAndPenalties(numTargets, lowBound=1, highBound = 50):
     """
     Generates a reward vector and a penalty vector within the given bounds
     """
-    rewards = np.random.uniform(low=lowBound, high=highBound, size=numTargets)
-    penalties = np.random.uniform(low=lowBound, high=highBound, size=numTargets)
+    rewards = torch.from_numpy(np.random.uniform(low=lowBound, high=highBound, size=numTargets))
+    penalties = torch.from_numpy(np.random.uniform(low=lowBound, high=highBound, size=numTargets))
     return (rewards, penalties)
 
 # ------------------------------------------------------------------------------

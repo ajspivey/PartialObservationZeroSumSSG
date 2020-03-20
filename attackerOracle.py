@@ -53,6 +53,14 @@ class AttackerOracle(gO.Oracle):
             return modelInput
         return buildInput
 
+    def setState(self, state):
+        if state is not None:
+            self.load_state_dict(state, strict=True)
+
+    def getState(self):
+        state = self.state_dict()
+        return state
+
 class RandomAttackerOracle(gO.Oracle):
     def __init__(self, targetNum, game):
         super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
@@ -80,6 +88,12 @@ class RandomAttackerOracle(gO.Oracle):
             modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
             return modelInput
         return buildInput
+
+    def getState(self):
+        return None
+
+    def setState(self, state):
+        pass
 
 # class UniformAttackerOracle(gO.Oracle):
 #     def __init__(self, targetNum, game):
@@ -109,9 +123,9 @@ class RandomAttackerOracle(gO.Oracle):
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, iterations=100, optimizer=None, lossFunction=nn.SmoothL1Loss(), showOutput=False):
+def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, iterations=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.RMSprop(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters())
 
     inputFunction = oracleToTrain.inputFromGame(game)
 
@@ -143,10 +157,11 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, ep
                 dAction = game.makeLegalMove(ssg.DEFENDER, dAction)
 
                 guess = oracleToTrain(inputFunction(aOb))
-                aAction, _ = game.getBestActionAndScore(ssg.ATTACKER, dAction, game.defenderRewards, game.defenderPenalties)
+                guessScore = game.getActionScore(ssg.ATTACKER, guess, dAction, game.defenderRewards, game.defenderPenalties)
+                aAction, labelScore = game.getBestActionAndScore(ssg.ATTACKER, dAction, game.defenderRewards, game.defenderPenalties)
                 label = torch.from_numpy(aAction).float().requires_grad_(True)
 
-                loss = lossFunction(guess, label)
+                loss = lossFunction(torch.from_numpy(np.array(guessScore)).float().requires_grad_(True), torch.from_numpy(np.array(labelScore)).float().requires_grad_(True))
                 totalLoss += loss.item()
 
                 optimizer.zero_grad()
