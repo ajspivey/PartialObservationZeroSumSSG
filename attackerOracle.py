@@ -12,7 +12,6 @@ from random import Random
 
 # Internal Imports
 import ssg
-import generalOracle as gO
 
 # Set the random seed
 torch.manual_seed(1)
@@ -21,14 +20,18 @@ np.random.seed(1)
 # ==============================================================================
 # CLASSES
 # ==============================================================================
-class AttackerOracle(gO.Oracle):
+class AttackerOracle(nn.Module):
     def __init__(self, targetNum):
-        super(AttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        super(AttackerOracle, self).__init__()
         self.targetNum = targetNum
         self.featureCount = ssg.ATTACKER_FEATURE_SIZE
 
     # Define a forward pass of the network
     def forward(self, observation):
+        old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
+        new = torch.from_numpy(observation).float().requires_grad_(True)
+        modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
+
         # Linear Layer
         linearOut = self.linearLayer(observation)
         # CReLU
@@ -45,13 +48,8 @@ class AttackerOracle(gO.Oracle):
         output = self.outputSoftmax(linearOutput).view(2,self.targetNum).squeeze(1).float().requires_grad_(True)[1]
         return output
 
-    def inputFromGame(self, game):
-        def buildInput(observation):
-            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-            new = torch.from_numpy(observation).float().requires_grad_(True)
-            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
-            return modelInput
-        return buildInput
+    def getAction(self, game, observation):
+        return max([self.forward(observation, action) for action in game.getValidActions(game.ATTACKER)])
 
     def setState(self, state):
         if state is not None:
@@ -61,9 +59,9 @@ class AttackerOracle(gO.Oracle):
         state = self.state_dict()
         return state
 
-class RandomAttackerOracle(gO.Oracle):
+class RandomAttackerOracle():
     def __init__(self, targetNum, game):
-        super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
+        super(RandomAttackerOracle, self).__init__()
         self.targetNum = targetNum
         self.featureCount = ssg.ATTACKER_FEATURE_SIZE
         self.game = game
@@ -71,23 +69,14 @@ class RandomAttackerOracle(gO.Oracle):
         self.random = Random()
         self.startState = self.random.getstate()
 
-    # Define a forward pass of the network
-    def forward(self, observation):
+    def getAction(self, game, observation):
         # Get all the valid games
         validActions = self.game.getValidActions(ssg.ATTACKER)
-        choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
+        choice = np.asarray(self.random.choice(validActions))
         return choice
 
     def reset(self):
         self.random.setstate(self.startState)
-
-    def inputFromGame(self, game):
-        def buildInput(observation):
-            old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-            new = torch.from_numpy(observation).float().requires_grad_(True)
-            modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
-            return modelInput
-        return buildInput
 
     def getState(self):
         return None

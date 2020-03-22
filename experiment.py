@@ -43,10 +43,10 @@ def main():
     # =========
     autograd.set_detect_anomaly(True)
     showFrameworkOutput = True
-    showOracleTraining = False
+    showOracleTraining = True
     showUtilities = False
     showStrategies = False
-    writeUtilityFile = True
+    writeUtilityFile = False
     # +++++++++
 
     # ===============
@@ -169,8 +169,8 @@ def main():
         # Find the best oracle we currently have (to base training off of)
         if showFrameworkOutput:
             print("Finding highest utility defender oracle")
-        # bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values())
-        # print(f"Best Oracle: {bestDOracle}, bestUtility: {bestDOracleUtility}")
+        bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values())
+        print(f"Best Oracle: {bestDOracle}, bestUtility: {bestDOracleUtility}")
         bestDOracle = defenderIdMap[0]
 
         # Train a new oracle
