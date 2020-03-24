@@ -181,11 +181,15 @@ def main():
         newDOracle.setState(parameters)
         dO.train(oracleToTrain=newDOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, showOutput=showOracleTraining)
         # See the average payout of the new oracle
-        newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
-        print(f"New Oracle Utility: {newDOracleScore}")
-
         if showFrameworkOutput:
             print("Defender oracle computed.")
+            print("Testing score of new oracle")
+        newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
+        if showFrameworkOutput:
+            print(f"New Oracle Utility Computed: {newDOracleScore}")
+
+        asdfasdfsasdfasdf
+
         # --------
 
         # --------

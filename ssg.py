@@ -99,24 +99,12 @@ class SequentialZeroSumSSG(object):
                         actions.append(action)
         return actions
     # --------------------------------------------------------------------------
-    def performActions(self, player, playerAction, enemyAction, oldPOb, oldEOb):
+    def performActions(self, defenderAction, attackerAction, oldDOb, oldAOb):
         """
         Performs the actions of the player and their opponent. Updates internal
         game state to reflect the new state of the game, and returns the new
         observations for the player and opponent
         """
-        # Determine who is attacker and who is defender
-        if (player == DEFENDER):
-            defenderAction = playerAction
-            attackerAction = enemyAction
-            oldDOb = oldPOb
-            oldAOb = oldEOb
-        else:
-            attackerAction = playerAction
-            defenderAction = enemyAction
-            oldAOb = oldPOb
-            oldDOb = oldEOb
-
         self.currentTimestep += 1
         attackStatus = 1 - int(sum(np.multiply(attackerAction,defenderAction)))
         attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
@@ -136,15 +124,7 @@ class SequentialZeroSumSSG(object):
         defenderActionScore = self.getActionScore(DEFENDER, attackerAction, defenderAction, self.defenderRewards, self.defenderPenalties)
         self.defenderUtility += defenderActionScore
 
-        # Determine who is attacker and who is defender
-        if (player == DEFENDER):
-            pObservation = dObservation
-            eObservation = aObservation
-        else:
-            eObservation = dObservation
-            pObservation = aObservation
-
-        return (pObservation, eObservation)
+        return (dObservation, aObservation)
 
     # --------------------------------------------------------------------------
     def getEmptyObservations(self):
@@ -203,7 +183,7 @@ class SequentialZeroSumSSG(object):
         for timestep in range(self.timesteps):
             dAction = defenderStrat.getAction(self, dOb)
             aAction = attackerStrat.getAction(self, aOb)
-            dOb, aOb = self.performActions(DEFENDER, dAction, aAction, dOb, aOb)
+            dOb, aOb = self.performActions(dAction, aAction, dOb, aOb)
 
         payout = self.defenderUtility
         defenderStrat.reset()
@@ -213,7 +193,7 @@ class SequentialZeroSumSSG(object):
         return payout
 
     # --------------------------------------------------------------------------
-    def getOracleScore(self, player, ids, map, mix, oracle, iterations=100):
+    def getOracleScore(self, player, ids, map, mix, oracle, epochs=20):
         """
         Returns the utility of an oracle vs. a mixed strategy
         """
@@ -222,20 +202,27 @@ class SequentialZeroSumSSG(object):
 
         # Calculate average utility for each oracle in the list
         avgUtility = 0
-        pAgent = oracle
-        for iteration in range(iterations):
-            pOb, eOb = self.getEmptyObservations()
+        if player == DEFENDER:
+            dAgent = oracle
+        else:
+            aAgent = oracle
+        for epoch in range(epochs):
+            print(f"iteration {epoch} of {epochs}")
+            dOb, aOb = self.getEmptyObservations()
 
             # Choose the agent from the mixed strategy
             choice = np.random.choice(ids, 1,
             p=mix)[0]
-            eAgent = map[choice]
+            if player == DEFENDER:
+                aAgent = map[choice]
+            else:
+                dAgent = map[choice]
 
             # Play a full game
             for timestep in range(self.timesteps):
-                eAction = eAgent.getAction(self, eOb)
-                pAction = pAgent.getAction(self, pOb)
-                pOb, eOb = self.performActions(player, pAction, eAction, pOb, eOb)
+                aAction = aAgent.getAction(self, aOb)
+                dAction = dAgent.getAction(self, dOb)
+                dOb, aOb = self.performActions(dAction, aAction, dOb, aOb)
             avgUtility += self.defenderUtility * player
             self.restartGame()
 
@@ -243,7 +230,7 @@ class SequentialZeroSumSSG(object):
                 enemy.reset()
             oracle.reset()
 
-        avgUtility = avgUtility / iterations
+        avgUtility = avgUtility / epochs
         return avgUtility
 
     # --------------------------------------------------------------------------

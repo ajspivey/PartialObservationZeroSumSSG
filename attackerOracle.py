@@ -49,7 +49,13 @@ class AttackerOracle(nn.Module):
         return output
 
     def getAction(self, game, observation):
-        return max([self.forward(observation, action) for action in game.getValidActions(game.ATTACKER)])
+        actions = game.getValidActions(ssg.ATTACKER)
+        return self.getActionFromActions(game, actions, observation)
+
+    def getActionFromActions(self, game, actions, observation):
+        index = np.argmax([self.forward(game, observation, action) for action in actions])
+        action = actions[index]
+        return action
 
     def setState(self, state):
         if state is not None:
@@ -70,9 +76,11 @@ class RandomAttackerOracle():
         self.startState = self.random.getstate()
 
     def getAction(self, game, observation):
-        # Get all the valid games
-        validActions = self.game.getValidActions(ssg.ATTACKER)
-        choice = np.asarray(self.random.choice(validActions))
+        actions = game.getValidActions(ssg.ATTACKER)
+        return self.getActionFromActions(game, actions, observation)
+
+    def getActionFromActions(self, game, actions, observation):
+        choice = np.asarray(self.random.choice(actions))
         return choice
 
     def reset(self):
@@ -84,87 +92,42 @@ class RandomAttackerOracle():
     def setState(self, state):
         pass
 
-# class UniformAttackerOracle(gO.Oracle):
-#     def __init__(self, targetNum, game):
-#         super(RandomAttackerOracle, self).__init__(targetNum, ssg.ATTACKER_FEATURE_SIZE)
-#         self.targetNum = targetNum
-#         self.featureCount = ssg.ATTACKER_FEATURE_SIZE
-#         self.game = game
-#
-#         self.random = Random()
-#
-#     # Define a forward pass of the network
-#     def forward(self, observation):
-#         # Get all the valid games
-#         validActions = self.game.getValidActions(ssg.ATTACKER)
-#         choice = torch.from_numpy(np.asarray(self.random.choice(validActions))).float().requires_grad_(True)
-#         return choice
-#
-#     def inputFromGame(self, game):
-#         def buildInput(observation):
-#             old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-#             new = torch.from_numpy(observation).float().requires_grad_(True)
-#             modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
-#             return modelInput
-#         return buildInput
-
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
 
-def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, iterations=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
 
-    inputFunction = oracleToTrain.inputFromGame(game)
+    for _ in range(0, epochs):
+        avgLoss = 0
+        defenderAgent = dMap[np.random.choice(dIds, 1, p=defenderMixedStrategy)[0]]
 
-    totalLoss = float("inf")
-    totalUtility = 0
+        dOb, aOb = game.getEmptyObservations()
+        for timestep in range(game.timesteps):
+            dAction = defenderAgent.getAction(game, dOb)
+            actions = game.getValidActions(ssg.ATTACKER)
+            aAction = oracleToTrain.getActionFromActions(game, actions, aOb)
 
-    # Choose whether to use the uniform distribution (explore) or the mixed distribution
-    # distributionChoice = np.random.choice([0,1], 1, p=[1-alpha, alpha])[0]
-    # distribution = distributions[distributionChoice]
-    # uniformStrategy = [1/len(defenderMixedStrategy)] * len(defenderMixedStrategy)
-    # distributions = [defenderMixedStrategy, uniformStrategy]
-    for _ in range(iterations):
-        if (showOutput):
-            print(f"Avg loss for last {epochs} samples = {totalLoss}")
-            print(f"Avg utility for last {epochs} samples = {totalUtility}")
-        totalLoss = 0
-        for _ in range(0, epochs):
-            dAction = [0]*game.numTargets
-            aAction = [0]*game.numTargets
-            dOb, aOb = game.getEmptyObservations()
-
-            distribution = defenderMixedStrategy
-            defenderAgent = dMap[np.random.choice(dIds, 1,
-            p=distribution)[0]]
-            agentInputFunction = defenderAgent.inputFromGame(game)
-
-            for timestep in range(game.timesteps):
-                dAction = defenderAgent(agentInputFunction(dOb))
-                dAction = game.makeLegalMove(ssg.DEFENDER, dAction)
-
-                guess = oracleToTrain(inputFunction(aOb))
-                guessScore = game.getActionScore(ssg.ATTACKER, guess, dAction, game.defenderRewards, game.defenderPenalties)
-                aAction, labelScore = game.getBestActionAndScore(ssg.ATTACKER, dAction, game.defenderRewards, game.defenderPenalties)
-                label = torch.from_numpy(aAction).float().requires_grad_(True)
-
-                loss = lossFunction(torch.from_numpy(np.array(guessScore)).float().requires_grad_(True), torch.from_numpy(np.array(labelScore)).float().requires_grad_(True))
-                totalLoss += loss.item()
-
+            for action in actions:
+                qValueGuess = oracleToTrain(game, dOb, action)
+                qValueLabel = torch.tensor(game.getActionScore(ssg.ATTACKER, action, dAction, game.defenderRewards, game.defenderPenalties))
+                loss = lossFunction(qValueGuess,qValueLabel)
+                avgLoss += loss.item()
                 optimizer.zero_grad()
-                loss.backward() # compute the gradient of the loss with respect to the parameters of the model
-                optimizer.step() # Perform a step of the optimizer based on the gradient just calculated
+                loss.backward()
+                optimizer.step()
+            avgLoss /= len(actions)
+            dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
 
-                dOb, aOb = game.performActions(ssg.ATTACKER, label, dAction, aOb, dOb)
-            totalUtility -= game.defenderUtility
-            game.restartGame()
-            for dId in dIds:
-                dMap[dId].reset()
+        game.restartGame()
+        for dId in dIds:
+            dMap[dId].reset()
 
-        totalLoss = totalLoss/epochs
-        totalUtility = totalUtility/epochs
+        avgLoss /= game.timesteps
+        if (showOutput):
+            print(f"Avg loss for last epoch: {avgLoss}")
 
 # ==============================================================================
 # MAIN
