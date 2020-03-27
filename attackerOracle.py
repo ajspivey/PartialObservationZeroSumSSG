@@ -25,35 +25,38 @@ class AttackerOracle(nn.Module):
         super(AttackerOracle, self).__init__()
         self.targetNum = targetNum
         self.featureCount = ssg.ATTACKER_FEATURE_SIZE
+        self.observation_dim = targetNum * self.featureCount
+        self.input_size = self.observation_dim + targetNum
+
+        self.linearLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
+        self.ReLU = nn.ReLU()
+        self.LSTM = nn.LSTM(2*self.input_size*self.featureCount, self.input_size*self.featureCount)
+        self.outputLinearLayer = nn.Linear(2*self.input_size*self.featureCount, 1)
 
     # Define a forward pass of the network
-    def forward(self, observation):
-        old = torch.from_numpy(game.previousAttackerObservation).float().requires_grad_(True)
-        new = torch.from_numpy(observation).float().requires_grad_(True)
-        modelInput = torch.cat((old.unsqueeze(0),new.unsqueeze(0)))
-
+    def forward(self, oldObservation, observation, oldAction, action):
+        inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
         # Linear Layer
-        linearOut = self.linearLayer(observation)
+        linearOut = self.linearLayer(inputTensor)
         # CReLU
         ReLUOld, ReLUNew = self.ReLU(linearOut)
         CReLUOld = torch.cat((ReLUOld, -ReLUOld),0)
         CReLUNew = torch.cat((ReLUNew, -ReLUNew),0)
-        CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.featureCount).unsqueeze(1)
+        CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.input_size*self.featureCount).unsqueeze(1)
         # LSTM
         LSTMOut, _ = self.LSTM(CReLU)
-        sequenceSize, batchSize, numberOfOutputFeatures = LSTMOut.size(0), LSTMOut.size(1), LSTMOut.size(2)
-        LSTMOut = LSTMOut.view(sequenceSize*batchSize, numberOfOutputFeatures)
+        # sequenceSize, batchSize, numberOfOutputFeatures = LSTMOut.size(0), LSTMOut.size(1), LSTMOut.size(2)
+        LSTMOut = torch.flatten(LSTMOut)
         # Output
-        linearOutput = self.outputLinearLayer(LSTMOut)
-        output = self.outputSoftmax(linearOutput).view(2,self.targetNum).squeeze(1).float().requires_grad_(True)[1]
-        return output
+        output = self.outputLinearLayer(LSTMOut)
+        return output[0]
 
     def getAction(self, game, observation):
         actions = game.getValidActions(ssg.ATTACKER)
         return self.getActionFromActions(game, actions, observation)
 
     def getActionFromActions(self, game, actions, observation):
-        index = np.argmax([self.forward(game, observation, action) for action in actions])
+        index = np.argmax([self.forward(game.previousAttackerObservation, observation, game.previousDefenderAction, action) for action in actions])
         action = actions[index]
         return action
 
@@ -65,36 +68,20 @@ class AttackerOracle(nn.Module):
         state = self.state_dict()
         return state
 
-class RandomAttackerOracle():
-    def __init__(self, targetNum, game):
-        super(RandomAttackerOracle, self).__init__()
-        self.targetNum = targetNum
-        self.featureCount = ssg.ATTACKER_FEATURE_SIZE
-        self.game = game
-
-        self.random = Random()
-        self.startState = self.random.getstate()
-
-    def getAction(self, game, observation):
-        actions = game.getValidActions(ssg.ATTACKER)
-        return self.getActionFromActions(game, actions, observation)
-
-    def getActionFromActions(self, game, actions, observation):
-        choice = np.asarray(self.random.choice(actions))
-        return choice
-
-    def reset(self):
-        self.random.setstate(self.startState)
-
-    def getState(self):
-        return None
-
-    def setState(self, state):
-        pass
-
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
+def getInputTensor(oldObservation, observation, oldAction, action):
+    oldActionTensor = torch.tensor(oldAction).float().requires_grad_(True)
+    newActionTensor = torch.tensor(action).float().requires_grad_(True)
+    oldObservationTensor = torch.from_numpy(oldObservation).float().requires_grad_(True)
+    newObservationTensor = torch.from_numpy(observation).float().requires_grad_(True)
+
+    old = torch.cat((oldObservationTensor, oldActionTensor),0)
+    new = torch.cat((newObservationTensor, newActionTensor),0)
+
+    return torch.cat((old.unsqueeze(0), new.unsqueeze(0)))
+
 
 def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, epochs=10, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
@@ -119,11 +106,9 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, alpha=0.15, ep
                 loss.backward()
                 optimizer.step()
             avgLoss /= len(actions)
-            dOb, aOb = game.performActions(dAction, aAction, dOb, aOb)
+            dOb, aOb, reward = game.performActions(dAction, aAction, dOb, aOb)
 
         game.restartGame()
-        for dId in dIds:
-            dMap[dId].reset()
 
         avgLoss /= game.timesteps
         if (showOutput):

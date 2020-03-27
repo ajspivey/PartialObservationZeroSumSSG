@@ -121,10 +121,10 @@ class SequentialZeroSumSSG(object):
         self.previousDefenderAction = defenderAction
 
         # Update utility scores
-        defenderActionScore = self.getActionScore(DEFENDER, attackerAction, defenderAction, self.defenderRewards, self.defenderPenalties)
+        defenderActionScore = self.getActionScore(DEFENDER, defenderAction, attackerAction, self.defenderRewards, self.defenderPenalties)
         self.defenderUtility += defenderActionScore
 
-        return (dObservation, aObservation)
+        return (dObservation, aObservation, self.defenderUtility)
 
     # --------------------------------------------------------------------------
     def getEmptyObservations(self):
@@ -147,29 +147,12 @@ class SequentialZeroSumSSG(object):
         else:
             aAction = pAction
             dAction = eAction
-        defenderReward = sum(dAction * aAction * defenderRewards)
-        defenderPenalty = sum(dAction * aAction * defenderPenalties) - sum(aAction * defenderPenalties)
-        score = defenderReward + defenderPenalty
+        defenderReward = sum(np.multiply(np.multiply(dAction, aAction), defenderRewards))
+        defenderPenalty = sum(np.multiply(aAction, defenderPenalties)) - sum(np.multiply(np.multiply(dAction, aAction), defenderPenalties))
+        score = defenderReward - defenderPenalty
         if player == ATTACKER:
             score = score * -1
         return score
-
-    # --------------------------------------------------------------------------
-    def getBestActionAndScore(self, player, eAction, defenderRewards, defenderPenalties):
-        """
-        Returns the best action and the score of the best action for a player given
-        their opponent's action
-        """
-        actions = self.getValidActions(player)
-        bestAction = actions[0]
-        bestActionScore = float("-inf")
-        for action in actions:
-            actionScore = self.getActionScore(player, torch.tensor(action), eAction, defenderRewards, defenderPenalties)
-
-            if actionScore > bestActionScore:
-                bestActionScore = actionScore
-                bestAction = action
-        return (np.array(bestAction), bestActionScore)
 
     # --------------------------------------------------------------------------
     def getPayout(self, defenderStrat, attackerStrat):
@@ -183,17 +166,15 @@ class SequentialZeroSumSSG(object):
         for timestep in range(self.timesteps):
             dAction = defenderStrat.getAction(self, dOb)
             aAction = attackerStrat.getAction(self, aOb)
-            dOb, aOb = self.performActions(dAction, aAction, dOb, aOb)
+            dOb, aOb, _ = self.performActions(dAction, aAction, dOb, aOb)
 
         payout = self.defenderUtility
-        defenderStrat.reset()
-        attackerStrat.reset()
         self.restartGame()
 
         return payout
 
     # --------------------------------------------------------------------------
-    def getOracleScore(self, player, ids, map, mix, oracle, epochs=20):
+    def getOracleScore(self, player, ids, map, mix, oracle, epochs=10):
         """
         Returns the utility of an oracle vs. a mixed strategy
         """
@@ -207,7 +188,6 @@ class SequentialZeroSumSSG(object):
         else:
             aAgent = oracle
         for epoch in range(epochs):
-            print(f"iteration {epoch} of {epochs}")
             dOb, aOb = self.getEmptyObservations()
 
             # Choose the agent from the mixed strategy
@@ -222,13 +202,9 @@ class SequentialZeroSumSSG(object):
             for timestep in range(self.timesteps):
                 aAction = aAgent.getAction(self, aOb)
                 dAction = dAgent.getAction(self, dOb)
-                dOb, aOb = self.performActions(dAction, aAction, dOb, aOb)
+                dOb, aOb, _ = self.performActions(dAction, aAction, dOb, aOb)
             avgUtility += self.defenderUtility * player
             self.restartGame()
-
-            for enemy in map.values():
-                enemy.reset()
-            oracle.reset()
 
         avgUtility = avgUtility / epochs
         return avgUtility
@@ -250,8 +226,6 @@ class SequentialZeroSumSSG(object):
                 bestOracle = oracle
         return (bestOracle, bestUtility)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 
 
 # =====================
