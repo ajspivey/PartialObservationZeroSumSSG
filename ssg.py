@@ -191,8 +191,7 @@ class SequentialZeroSumSSG(object):
             dOb, aOb = self.getEmptyObservations()
 
             # Choose the agent from the mixed strategy
-            choice = np.random.choice(ids, 1,
-            p=mix)[0]
+            choice = np.random.choice(ids, 1, p=mix)[0]
             if player == DEFENDER:
                 aAgent = map[choice]
             else:

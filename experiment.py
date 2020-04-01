@@ -30,6 +30,7 @@ import defenderOracle as dO
 import coreLP
 import torch
 from torch import autograd
+
 # +++++++
 
 np.random.seed(1)
@@ -52,8 +53,8 @@ def main():
     # ===============
     # HyperParameters
     # ===============
-    experimentIterations = 35
-    seedingIterations = 5
+    experimentIterations = 10
+    seedingIterations = 3
     targetNum = 4
     resources = 2
     timesteps = 2
@@ -68,10 +69,8 @@ def main():
         print("Creating game...")
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     # Used to do consistent testing and comparisons
-    # defenderRewards = torch.tensor([21.43407823, 36.29590018,  1.00560437, 15.81429606,  8.19103865,  5.52459114], requires_grad=True)
-    # defenderPenalties = torch.tensor([10.12675036, 17.93247563, 20.44160624, 27.40201997, 21.54053121, 34.57575552], requires_grad=True)
-    defenderRewards = torch.tensor([21.43407823, 36.29590018,  1.00560437, 15.81429606,  8.19103865], requires_grad=True)
-    defenderPenalties = torch.tensor([10.12675036, 17.93247563, 20.44160624, 27.40201997, 21.54053121], requires_grad=True)
+    game.defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
+    game.defenderPenalties = [10.12675036, 17.93247563, 0.44160624, 7.40201997]
 
     if showFrameworkOutput:
         print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
@@ -191,23 +190,24 @@ def main():
         # ATTACKER
         # --------
         # Find the best oracle we currently have (to base training off of)
-        # if showFrameworkOutput:
-        #     print("Finding highest utility attacker oracle")
-        # bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
-        # print(f"Best Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
-        # # Train a new oracle
-        # if showFrameworkOutput:
-        #     print("Computing attacker oracle...")
-        # parameters = bestAOracle.getState()
-        # newAOracle = aO.AttackerOracle(targetNum)
-        # newAOracle.setState(parameters)
-        # aO.train(oracleToTrain=newAOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, showOutput=showOracleTraining)
-        # newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
-        # print(f"New Oracle Utility: {newAOracleScore}")
-        #
-        # if showFrameworkOutput:
-        #     print("Attacker oracle computed")
-        #     print()
+        if showFrameworkOutput:
+            print("Finding highest utility attacker oracle")
+        bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
+        print(f"Best Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
+        # Train a new oracle
+        if showFrameworkOutput:
+            print("Computing attacker oracle...")
+        parameters = bestAOracle.getState()
+        newAOracle = aO.AttackerOracle(targetNum)
+        newAOracle.setState(parameters)
+        aO.train(oracleToTrain=newAOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, showOutput=showOracleTraining)
+        if showFrameworkOutput:
+            print("Attacker oracle computed")
+            print("Testing score of new oracle")
+        newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
+        if showFrameworkOutput:
+            print(f"New Oracle Utility Computed: {newAOracleScore}")
+
         # ---------
 
         if showStrategies:
@@ -223,8 +223,6 @@ def main():
             print(f"D Oracle utility (Should be > avg Mixed): {dOracleUtility}")
             print(f"A Oracle utility (Should be > avg Mixed): {aOracleUtility}")
         if writeUtilityFile:
-            newAOracleScore = 0
-            bestAOracleUtility = 0
             csvWriter.writerow([f"{dUtility}",f"{aUtility}",f"{newDOracleScore}",f"{bestDOracleUtility}",f"{newAOracleScore}",f"{bestAOracleUtility}"])
         # ----------------------------------------------------------------------
 
@@ -237,17 +235,17 @@ def main():
             # Run the game some amount of times
             value = game.getPayout(newDOracle, attackerIdMap[attackerId])
             payoutMatrix[newDefenderId, attackerId] = value
-        # for defenderId in defenderPureIds:
-        #     # Run the game some amount of times
-        #     value = game.getPayout(defenderIdMap[defenderId], newAOracle)
-        #     payoutMatrix[defenderId, newAttackerId] = value
-        # value = game.getPayout(newDOracle, newAOracle)
-        # payoutMatrix[newDefenderId, newAttackerId] = value
-        # attackerPureIds.append(newAttackerId)
+        for defenderId in defenderPureIds:
+            # Run the game some amount of times
+            value = game.getPayout(defenderIdMap[defenderId], newAOracle)
+            payoutMatrix[defenderId, newAttackerId] = value
+        value = game.getPayout(newDOracle, newAOracle)
+        payoutMatrix[newDefenderId, newAttackerId] = value
+        attackerPureIds.append(newAttackerId)
         defenderPureIds.append(newDefenderId)
-        # attackerIdMap[newAttackerId] = newAOracle
+        attackerIdMap[newAttackerId] = newAOracle
         defenderIdMap[newDefenderId] = newDOracle
-        # newAttackerId += 1
+        newAttackerId += 1
         newDefenderId += 1
         if showFrameworkOutput:
             print("Pools and payout matrix updated.")

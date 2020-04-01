@@ -14,6 +14,7 @@ from random import Random
 
 # Internal Imports
 import ssg
+from coreLP import createDefenderOneShotModel
 
 # Set the random seed
 torch.manual_seed(1)
@@ -73,6 +74,31 @@ class DefenderOracle(nn.Module):
         state = self.state_dict()
         return state
 
+class DefenderEquilibrium():
+    def __init__(self, targetNum):
+        super(DefenderEquilibrium, self).__init__()
+        self.targetNum = targetNum
+
+    # Define a forward pass of the network
+    def forward(self, previousObservation, observation, previousAction, action):
+        return None
+
+    def getAction(self, game, observation):
+        defenderModel, actionDistribution, actions = createDefenderOneShotModel(game)
+        defenderModel.solve()
+        actionDistribution = [float(value) for value in actionDistribution.values()]
+        index = np.random.choice(range(len(actions)), 1, p=actionDistribution)[0]
+        return actions[index]
+
+    def getActionFromActions(self, game, actions, observation):
+        return self.getAction(game, observation)
+
+    def setState(self, state):
+        pass
+
+    def getState(self):
+        return None
+
 # ------------------------------------------------------------------------------
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -110,7 +136,8 @@ def getInputTensor(oldObservation, observation, oldAction, action):
 # ------------------------------------------------------------------------------
 def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=20, epochs=10, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.001)
+        optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
 
     # Initialize the replay memory with limited capacity N
@@ -157,7 +184,7 @@ def train(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSi
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-                # Every C steps, set Q^ = Q
+            # Every C steps, set Q^ = Q
             step += 1
             if step == C:
                 targetNetwork.setState(oracleToTrain.getState())
