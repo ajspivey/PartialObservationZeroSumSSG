@@ -146,16 +146,17 @@ def main():
     # ATTACKER
     # --------
     # Find the best oracle we currently have (to base training off of)
-    bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
-    print(f"Best A Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
-    # Train a new oracle
-    parameters = bestAOracle.getState()
-    newAOracle = aO.AttackerOracle(targetNum)
-    newAOracle.setState(parameters)
-    attackerTrain(newAOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, game)
-    newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
-    print(f"New A Oracle Utility Computed: {newAOracleScore}")
+    # bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
+    # print(f"Best A Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
+    # # Train a new oracle
+    # parameters = bestAOracle.getState()
+    # newAOracle = aO.AttackerOracle(targetNum)
+    # newAOracle.setState(parameters)
+    # attackerTrain(newAOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, game)
+    # newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
+    # print(f"New A Oracle Utility Computed: {newAOracleScore}")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
 def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=20, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)

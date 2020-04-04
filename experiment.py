@@ -7,9 +7,8 @@
 # * attacker oracle
 #
 # Remove unused functions
-# Get rid of "generalOracle"
 # Standardize function parameter orders
-# Standardize attacker/defender orders (defender before attacker)
+# Standardize attacker/defender orders (defender before attacker?)
 # Add docstrings to all functions
 # Recomment
 # Clean up whitespace/make flow of functions clear
