@@ -1,5 +1,4 @@
 # Deep Double Oracle SSG
-
 This is an implementation of the deep double oracle algorithm used for solving sequential zero sum SSGs with partial attacker observation.
 
 ## Getting Started
