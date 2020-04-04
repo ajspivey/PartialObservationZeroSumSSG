@@ -126,7 +126,7 @@ def main():
     if showFrameworkOutput:
         print("Beginning iteration:\n")
     if writeUtilityFile:
-        csvFile = open("utilities.csv", "w", newline='')
+        csvFile = open("outputFiles/utilities.csv", "w", newline='')
         csvWriter = csv.writer(csvFile, delimiter=',')
         csvWriter.writerow(["Defender Mixed Utility","Attacker Mixed Utility", "Avg. Defender Oracle Utility vs Mixed", "Avg Score of Best Defender Pure Strategy", "Avg. Attacker Oracle Utility vs Mixed", "Avg Score of Best Attacker Pure Strategy"])
     for _ in range(experimentIterations):

@@ -208,9 +208,10 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
                     avgLoss += loss.item()
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+            # Perform gradient descent on AVERAGE loss over minibatch
+            # optimizer.zero_grad()
+            # loss.backward()
+            # optimizer.step()
             oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
             history.append(oracleScore)
             lossHistory.append(avgLoss/batchSize)
