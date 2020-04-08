@@ -156,16 +156,19 @@ def main():
     # newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
     # print(f"New A Oracle Utility Computed: {newAOracleScore}")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    
-def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=20, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+
+def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=50, epochs=25, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
+        optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
     lossHistory = []
+    equilibriumHistory = []
 
+    gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
 
+    equilibriumDefender = DefenderEquilibrium(oracleToTrain.targetNum)
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
     # Initialize target network with weights equal to the oracle to train
@@ -199,6 +202,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
             avgLoss = 0
             if len(replayMemory) >= batchSize:
                 minibatch = replayMemory.sample(batchSize)
+                optimizer.zero_grad()
                 for sample in minibatch:
                     # For each thing in the minibatch, calculate the true label using Q^ (target network)
                     y = sample.reward
@@ -208,14 +212,20 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
+                    # print(f"sample: {sample}")
+                    # print(f"guess: {guess}")
+                    # print(f"label: {y}")
+                    # print(f"loss: {loss}")
+                    # print()
                     avgLoss += loss.item()
-            # Perform gradient descent on AVERAGE loss over minibatch
-            # optimizer.zero_grad()
-            # loss.backward()
-            # optimizer.step()
-            oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
+                    loss.backward()
+                # print("OPTIMIZER STEP\n\n")
+                optimizer.step()
+            oracleScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
+            equilibriumScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, equilibriumDefender)
             history.append(oracleScore)
             lossHistory.append(avgLoss/batchSize)
+            equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -227,10 +237,11 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
     oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
     print(f"ORACLE SCORE: {oracleScore}")
     fig1 = plt.figure(1)
-    plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Score')
-    plt.title('Oracle Score')
-    plt.xlabel('Iterations')
-    plt.ylabel('Score')
+    plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Utility')
+    plt.plot(range(epochs * game.timesteps), equilibriumHistory, 'r', label='Equilibrium Baseline Utility')
+    plt.title('Utility')
+    plt.xlabel('Minibatches Trained')
+    plt.ylabel('Utility')
     plt.legend()
 
     fig2 = plt.figure(2)
@@ -279,6 +290,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100,
             # Sample a random minibatch of transitions from replay memory
             if len(replayMemory) >= batchSize:
                 minibatch = replayMemory.sample(batchSize)
+                optimizer.zero_grad()
                 for sample in minibatch:
                     # For each thing in the minibatch, calculate the true label using Q^ (target network)
                     y = sample.reward
@@ -288,9 +300,8 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100,
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
-                    optimizer.zero_grad()
                     loss.backward()
-                    optimizer.step()
+                optimizer.step()
             oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
             history.append(oracleScore)
             # Every C steps, set Q^ = Q
