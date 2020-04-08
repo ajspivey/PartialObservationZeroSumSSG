@@ -157,7 +157,7 @@ def main():
     # print(f"New A Oracle Utility Computed: {newAOracleScore}")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=50, epochs=25, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
