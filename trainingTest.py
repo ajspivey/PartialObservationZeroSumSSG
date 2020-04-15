@@ -131,14 +131,14 @@ def main():
     # DEFENDER
     # --------
     # Find the best oracle we currently have (to base training off of)
-    bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values())
-    print(f"Best D Oracle: {bestDOracle}, bestUtility: {bestDOracleUtility}")
-    parameters = bestDOracle.getState()
-    newDOracle = dO.DefenderOracle(targetNum)
-    newDOracle.setState(parameters)
-    defenderTrain(newDOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, game)
-    newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
-    print(f"New D Oracle Utility Computed: {newDOracleScore}")
+    # bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values())
+    # print(f"Best D Oracle: {bestDOracle}, bestUtility: {bestDOracleUtility}")
+    # parameters = bestDOracle.getState()
+    # newDOracle = dO.DefenderOracle(targetNum)
+    # newDOracle.setState(parameters)
+    # defenderTrain(newDOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, game, defenderIdMap.values())
+    # newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
+    # print(f"New D Oracle Utility Computed: {newDOracleScore}")
 
     # --------
 
@@ -146,20 +146,20 @@ def main():
     # ATTACKER
     # --------
     # Find the best oracle we currently have (to base training off of)
-    # bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
-    # print(f"Best A Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
-    # # Train a new oracle
-    # parameters = bestAOracle.getState()
-    # newAOracle = aO.AttackerOracle(targetNum)
-    # newAOracle.setState(parameters)
-    # attackerTrain(newAOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, game)
-    # newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
-    # print(f"New A Oracle Utility Computed: {newAOracleScore}")
+    bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
+    print(f"Best A Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
+    # Train a new oracle
+    parameters = bestAOracle.getState()
+    newAOracle = aO.AttackerOracle(targetNum)
+    newAOracle.setState(parameters)
+    attackerTrain(newAOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, game, attackerIdMap.values())
+    newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
+    print(f"New A Oracle Utility Computed: {newAOracleScore}")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100, batchSize=15, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool, N=100, batchSize=15, C=50, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
@@ -168,7 +168,6 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
 
     gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
 
-    equilibriumDefender = DefenderEquilibrium(oracleToTrain.targetNum)
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
     # Initialize target network with weights equal to the oracle to train
@@ -212,17 +211,11 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
-                    # print(f"sample: {sample}")
-                    # print(f"guess: {guess}")
-                    # print(f"label: {y}")
-                    # print(f"loss: {loss}")
-                    # print()
                     avgLoss += loss.item()
                     loss.backward()
-                # print("OPTIMIZER STEP\n\n")
                 optimizer.step()
             oracleScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
-            equilibriumScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, equilibriumDefender)
+            equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, gameClone, dPool)
             history.append(oracleScore)
             lossHistory.append(avgLoss/batchSize)
             equilibriumHistory.append(equilibriumScore)
@@ -233,6 +226,8 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
                 step = 0
 
         game.restartGame()
+        equilibriumDistribution = attackerMixedStrategy
+        equilibriumAttackers = []
 
     oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
     print(f"ORACLE SCORE: {oracleScore}")
@@ -251,12 +246,17 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, N=100,
     plt.ylabel('Loss')
     plt.show()
 
-def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100, batchSize=15, C=20, epochs=30, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=20, epochs=30, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.001)
+        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
+    lossHistory = []
+    equilibriumHistory = []
+
+    gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -288,6 +288,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100,
             replayMemory.push(ob0, action0, ob1, action1, reward, dOb, game.getValidActions(ssg.ATTACKER))
 
             # Sample a random minibatch of transitions from replay memory
+            avgLoss = 0
             if len(replayMemory) >= batchSize:
                 minibatch = replayMemory.sample(batchSize)
                 optimizer.zero_grad()
@@ -300,10 +301,14 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100,
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
+                    avgLoss += loss.item()
                     loss.backward()
                 optimizer.step()
             oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
+            equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
             history.append(oracleScore)
+            lossHistory.append(avgLoss/batchSize)
+            equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -311,13 +316,76 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, N=100,
                 step = 0
 
         game.restartGame()
+        equilibriumDistribution = attackerMixedStrategy
+        equilibriumAttackers = []
 
-    plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Score')
-    plt.title('Oracle Score')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
+    oracleScore = game.getOracleScore(ssg.ATTACKER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
+    print(f"ORACLE SCORE: {oracleScore}")
+    fig1 = plt.figure(1)
+    plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Utility')
+    plt.plot(range(epochs * game.timesteps), equilibriumHistory, 'r', label='Equilibrium Baseline Utility')
+    plt.title('Utility')
+    plt.xlabel('Minibatches Trained')
+    plt.ylabel('Utility')
     plt.legend()
+
+    fig2 = plt.figure(2)
+    plt.plot(range(epochs * game.timesteps), lossHistory, 'r', label='Oracle Loss')
+    plt.title('Oracle Loss')
+    plt.xlabel('Iterations')
+    plt.ylabel('Loss')
     plt.show()
+
+def getBaselineScore(player, ids, map, mix, game, pool, epochs=20):
+    # Calculate average utility for each oracle in the list
+    avgUtility = 0
+    for epoch in range(epochs):
+        equilibriumAgents = ids.copy()
+        equilibriumDistribution = mix.copy()
+
+        dOb, aOb = game.getEmptyObservations()
+
+        # Choose the agent from the mixed strategy
+        choice = np.random.choice(ids, 1, p=mix)[0]
+        eAgent = map[choice]
+
+        # Play a full game
+        for timestep in range(game.timesteps):
+            if player == ssg.DEFENDER:
+                pOb = dOb
+                eOb = aOb
+            else:
+                pOb = aOb
+                eOb = dOb
+            eAction = eAgent.getAction(game, eOb)
+            # THIS IS DIFFERENT FOR ATTACKER
+            for eId in equilibriumAgents:
+                agent = map[eId]
+                action = agent.getAction(game, eOb)
+                if action != eAction:
+                    equilibriumAgents.remove(eId)
+                    equilibriumDistribution.pop(eId)
+            equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
+
+            # Calculate the best response
+            pActions = [playerAgent.getAction(game, dOb) for playerAgent in pool]
+            actionScores = [game.getActionScore(player, pAction, eAction, game.defenderRewards, game.defenderPenalties) for pAction in pActions]
+            for i in range(len(equilibriumDistribution)):
+                actionScores[i] = actionScores[i] * equilibriumDistribution[i]
+            pAction = pActions[np.argmax(actionScores)]
+            if player == ssg.DEFENDER:
+                dAction = pAction
+                aAction = eAction
+            else:
+                dAction = eAction
+                aAction = pAction
+            dOb, aOb, _ = game.performActions(dAction, aAction, dOb, aOb)
+        avgUtility += game.defenderUtility * player
+        game.restartGame()
+
+    avgUtility = avgUtility / epochs
+    return avgUtility
+
 
 if __name__ == "__main__":
     main()

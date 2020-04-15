@@ -1,13 +1,14 @@
 # ======
 # @TODO:
 # ======
-# Generalize attacker/defender specific functions
+# Generalize attacker/defender specific functions using player
 # * -ssg-
 # * defender Oracle
 # * attacker oracle
 #
 # Remove unused functions
 # Standardize function parameter orders
+# standardize function parameters (player relative or not)
 # Standardize attacker/defender orders (defender before attacker?)
 # Add docstrings to all functions
 # Recomment
