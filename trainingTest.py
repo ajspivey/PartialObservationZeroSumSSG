@@ -359,13 +359,24 @@ def getBaselineScore(player, ids, map, mix, game, pool, epochs=20):
                 eOb = dOb
             eAction = eAgent.getAction(game, eOb)
             # THIS IS DIFFERENT FOR ATTACKER
-            for eId in equilibriumAgents:
-                agent = map[eId]
-                action = agent.getAction(game, eOb)
-                if action != eAction:
-                    equilibriumAgents.remove(eId)
-                    equilibriumDistribution.pop(eId)
-            equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
+            if (player == ssg.DEFENDER):
+                for eId in equilibriumAgents:
+                    agent = map[eId]
+                    action = agent.getAction(game, eOb)
+                    if action != eAction:
+                        equilibriumAgents.remove(eId)
+                        equilibriumDistribution.pop(eId)
+                equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
+            else:
+                obAction = pOb[:game.numTargets]
+                target = eAction * obAction
+                for eId in equilibriumAgents:
+                    agent = map[eId]
+                    action = agent.getAction(game, eOb)
+                    if not np.array_equal((action * obAction),target):
+                        equilibriumAgents.remove(eId)
+                        equilibriumDistribution.pop(eId)
+                equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
 
             # Calculate the best response
             pActions = [playerAgent.getAction(game, dOb) for playerAgent in pool]
