@@ -281,7 +281,8 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
             action0 = game.previousAttackerAction
             ob1 = aOb
             action1 = aAction
-            dOb, aOb, reward = game.performActions(dAction, aAction, dOb, aOb)
+            dOb, aOb, defenderReward = game.performActions(dAction, aAction, dOb, aOb)
+            reward = -defenderReward
 
             replayMemory.push(ob0, action0, ob1, action1, reward, dOb, game.getValidActions(ssg.ATTACKER))
 
@@ -298,15 +299,19 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
                     else:
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
+                    print(f"SAMPLE: {sample}")
+                    print(f"GUESS for sample:{guess}")
+                    print(f"Y for sample: {y}")
                     loss = lossFunction(guess, y)
                     avgLoss += loss.item()
                     loss.backward()
                 optimizer.step()
+                print()
             oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
-            equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
+            # equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
             history.append(oracleScore)
             lossHistory.append(avgLoss/batchSize)
-            equilibriumHistory.append(equilibriumScore)
+            # equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -319,7 +324,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
     print(f"ORACLE SCORE: {oracleScore}")
     fig1 = plt.figure(1)
     plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Utility')
-    plt.plot(range(epochs * game.timesteps), equilibriumHistory, 'r', label='Equilibrium Baseline Utility')
+    # plt.plot(range(epochs * game.timesteps), equilibriumHistory, 'r', label='Equilibrium Baseline Utility')
     plt.title('Utility')
     plt.xlabel('Minibatches Trained')
     plt.ylabel('Utility')

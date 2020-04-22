@@ -62,8 +62,13 @@ class AttackerOracle(nn.Module):
         return self.getActionFromActions(game, actions, observation)
 
     def getActionFromActions(self, game, actions, observation):
-        index = np.argmax([self.forward(game.previousAttackerObservation, observation, game.previousDefenderAction, action) for action in actions])
+        print(f"Available actions: {actions}")
+        estimates = [self.forward(game.previousAttackerObservation, observation, game.previousDefenderAction, action) for action in actions]
+        print(f"Estimates: {estimates}")
+        index = np.argmax(estimates)
         action = actions[index]
+        print(f"Chosen action: {action} at index {index}")
+        print()
         return action
 
     def setState(self, state):
