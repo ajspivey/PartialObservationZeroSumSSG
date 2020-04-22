@@ -157,9 +157,9 @@ def main():
     print(f"New A Oracle Utility Computed: {newAOracleScore}")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool, N=100, batchSize=15, C=50, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool, N=100, batchSize=15, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
+        optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
@@ -226,8 +226,6 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
                 step = 0
 
         game.restartGame()
-        equilibriumDistribution = attackerMixedStrategy
-        equilibriumAttackers = []
 
     oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
     print(f"ORACLE SCORE: {oracleScore}")
@@ -246,9 +244,9 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
     plt.ylabel('Loss')
     plt.show()
 
-def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=20, epochs=30, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
+        optimizer = optim.RMSprop(oracleToTrain.parameters(), lr=0.000001, momentum=0.8)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
@@ -316,10 +314,8 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
                 step = 0
 
         game.restartGame()
-        equilibriumDistribution = attackerMixedStrategy
-        equilibriumAttackers = []
 
-    oracleScore = game.getOracleScore(ssg.ATTACKER, aIds, aMap, attackerMixedStrategy, oracleToTrain)
+    oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
     print(f"ORACLE SCORE: {oracleScore}")
     fig1 = plt.figure(1)
     plt.plot(range(epochs * game.timesteps), history, 'g', label='Oracle Utility')
