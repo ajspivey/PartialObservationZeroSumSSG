@@ -244,9 +244,9 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
     plt.ylabel('Loss')
     plt.show()
 
-def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=200, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
-        optimizer = optim.RMSprop(oracleToTrain.parameters(), lr=0.000001, momentum=0.8)
+        optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     history = []
@@ -299,9 +299,6 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
                     else:
                         y = torch.tensor(y)
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
-                    print(f"SAMPLE: {sample}")
-                    print(f"GUESS for sample:{guess}")
-                    print(f"Y for sample: {y}")
                     loss = lossFunction(guess, y)
                     avgLoss += loss.item()
                     loss.backward()
