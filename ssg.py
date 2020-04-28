@@ -189,39 +189,36 @@ class SequentialZeroSumSSG(object):
         return defenderPayout
 
     # --------------------------------------------------------------------------
-    def getOracleScore(self, player, ids, map, mix, oracle, epochs=10):
+    def getOracleScore(self, player, ids, map, mix, oracle):
         """
-        Returns the positive utility of an oracle vs. a mixed strategy
+        Returns the expected utility of an oracle vs. a mixed strategy
         """
-        bestUtility = None
-        bestOracle = None
+        totalExpectedUtility = 0
 
-        # Calculate average utility for each oracle in the list
-        avgUtility = 0
         if player == DEFENDER:
             dAgent = oracle
         else:
             aAgent = oracle
-        for epoch in range(epochs):
-            dOb, aOb = self.getEmptyObservations()
 
-            # Choose the agent from the mixed strategy
-            choice = np.random.choice(ids, 1, p=mix)[0]
-            if player == DEFENDER:
-                aAgent = map[choice]
-            else:
-                dAgent = map[choice]
+        # Get the utility against each pure strategy used in the mixed strategy
+        for i in range(len(mix)):
+            if mix[i] > 0:
+                if player == DEFENDER:
+                    aAgent = map[i]
+                else:
+                    dAgent = map[i]
+                dOb, aOb = self.getEmptyObservations()
 
-            # Play a full game
-            for timestep in range(self.timesteps):
-                aAction = aAgent.getAction(self, aOb)
-                dAction = dAgent.getAction(self, dOb)
-                dOb, aOb, _, _ = self.performActions(dAction, aAction, dOb, aOb)
-            avgUtility += self.defenderUtility * player
-            self.restartGame()
+                # Play a full game
+                for timestep in range(self.timesteps):
+                    aAction = aAgent.getAction(self, aOb)
+                    dAction = dAgent.getAction(self, dOb)
+                    dOb, aOb, _, _ = self.performActions(dAction, aAction, dOb, aOb)
+                expectedUtility = self.defenderUtility * player * mix[i]
+                totalExpectedUtility += expectedUtility
+                self.restartGame()
 
-        avgUtility = avgUtility / epochs
-        return avgUtility
+        return totalExpectedUtility
 
     # --------------------------------------------------------------------------
     def getBestOracle(self, player, ids, map, mix, oracleList):
