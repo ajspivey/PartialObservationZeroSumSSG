@@ -21,8 +21,6 @@ DEFENDER_FEATURE_SIZE = 5
 ATTACKER_FEATURE_SIZE = 5
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-
-
 # ==============================================================================
 # CLASSES
 # ==============================================================================
@@ -57,13 +55,14 @@ class SequentialZeroSumSSG(object):
         self.currentTimestep = 0
         self.targets = [1] * self.numTargets
         self.availableResources = self.numResources
+        self.pastAttacks = [0]*self.numTargets
+        self.pastAttackStatuses = [0]*self.numTargets
+        self.defenderUtility = 0
+
         self.previousAttackerAction = np.array([0]*self.numTargets)
         self.previousDefenderAction = np.array([0]*self.numTargets)
         self.previousAttackerObservation = np.array([0]*self.numTargets*ATTACKER_FEATURE_SIZE)
         self.previousDefenderObservation = np.array([0]*self.numTargets*DEFENDER_FEATURE_SIZE)
-        self.pastAttacks = [0]*self.numTargets
-        self.pastAttackStatuses = [0]*self.numTargets
-        self.defenderUtility = 0
     # --------------------------------------------------------------------------
     def place_ones(self, size, count):
         """
@@ -74,6 +73,26 @@ class SequentialZeroSumSSG(object):
             for i in positions:
                 p[i] = 1
             yield p
+    # --------------------------------------------------------------------------
+    def playerToAttDef(player, pAction=None, eAction=None, pOb=None, eOb=None):
+        """
+        Converts player and enemy observations and actions to concrete.
+        returns (dAction, aAction, dOb, aOb)
+        """
+        if player == DEFENDER:
+            return (pAction, eAction, pOb, eOb)
+        else:
+            return (eAction, pAction, eOb, pOb)
+    # --------------------------------------------------------------------------
+    def attDefToPlayer(player, dAction=None, aAction=None, dOb=None, aOb=None):
+        """
+        Converts defender and attacker observations and actions to player-based.
+        returns (pAction, eAction, pOb, eOb)
+        """
+        if player == DEFENDER:
+            return (dAction, aAction, dOb, aOb)
+        else:
+            return (aAction, dAction, aOb, eOb)
 
 
     # -------------------------------
@@ -99,32 +118,35 @@ class SequentialZeroSumSSG(object):
                         actions.append(action)
         return actions
     # --------------------------------------------------------------------------
-    def performActions(self, defenderAction, attackerAction, oldDOb, oldAOb):
+    def performActions(self, dAction, aAction, dOb, aOb):
         """
-        Performs the actions of the player and their opponent. Updates internal
+        Performs the actions of the defender and attacker. Updates internal
         game state to reflect the new state of the game, and returns the new
-        observations for the player and opponent
+        observations for the defender and attacker, as well as the defender's and
+        attacker's scores for the move
         """
+        # update game state
         self.currentTimestep += 1
-        attackStatus = 1 - int(sum(np.multiply(attackerAction,defenderAction)))
-        attackedTarget = np.where(np.array(attackerAction)==1)[0][0]
+        attackStatus = 1 - int(sum(np.multiply(aAction,dAction)))
+        attackedTarget = np.where(np.array(aAction)==1)[0][0]
         self.availableResources = self.availableResources - (1 - attackStatus)
         self.pastAttacks[attackedTarget] = self.currentTimestep
-        self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(attackerAction, attackStatus))
+        self.pastAttackStatuses = np.add(self.pastAttackStatuses, np.multiply(aAction, attackStatus))
 
         # Update actions and observations
-        self.previousAttackerObservation = oldAOb
-        self.previousDefenderObservation = oldDOb
-        dObservation = np.concatenate((defenderAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
-        aObservation = np.concatenate((attackerAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
-        self.previousAttackerAction = attackerAction
-        self.previousDefenderAction = defenderAction
+        self.previousDefenderObservation = dOb
+        self.previousDefenderAction = dAction
+        dOb = np.concatenate((dAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
+
+        self.previousAttackerObservation = aOb
+        self.previousAttackerAction = aAction
+        aOb = np.concatenate((aAction, self.pastAttacks, self.pastAttackStatuses, self.defenderRewards, self.defenderPenalties))
 
         # Update utility scores
-        defenderActionScore = self.getActionScore(DEFENDER, defenderAction, attackerAction, self.defenderRewards, self.defenderPenalties)
+        defenderActionScore, attackerActionScore = self.getActionScore(dAction, aAction, self.defenderRewards, self.defenderPenalties)
         self.defenderUtility += defenderActionScore
 
-        return (dObservation, aObservation, self.defenderUtility)
+        return (dOb, aOb, defenderActionScore, attackerActionScore)
 
     # --------------------------------------------------------------------------
     def getEmptyObservations(self):
@@ -137,22 +159,15 @@ class SequentialZeroSumSSG(object):
         return (defenderObservation, attackerObservation)
 
     # --------------------------------------------------------------------------
-    def getActionScore(self, player, pAction, eAction, defenderRewards, defenderPenalties):
+    def getActionScore(self, dAction, aAction, defenderRewards, defenderPenalties):
         """
-        Returns the score for a player if the two given actions are played
+        Returns the score for defender and attacker if the two given actions are played
         """
-        if (player == DEFENDER):
-            dAction = pAction
-            aAction = eAction
-        else:
-            aAction = pAction
-            dAction = eAction
         defenderReward = sum(np.multiply(np.multiply(dAction, aAction), defenderRewards))
         defenderPenalty = sum(np.multiply(aAction, defenderPenalties)) - sum(np.multiply(np.multiply(dAction, aAction), defenderPenalties))
-        score = defenderReward - defenderPenalty
-        if player == ATTACKER:
-            score = score * -1
-        return score
+        defenderScore = defenderReward - defenderPenalty
+        attackerScore = defenderScore * -1
+        return defenderScore, attackerScore
 
     # --------------------------------------------------------------------------
     def getPayout(self, defenderStrat, attackerStrat):
@@ -166,17 +181,17 @@ class SequentialZeroSumSSG(object):
         for timestep in range(self.timesteps):
             dAction = defenderStrat.getAction(self, dOb)
             aAction = attackerStrat.getAction(self, aOb)
-            dOb, aOb, _ = self.performActions(dAction, aAction, dOb, aOb)
+            dOb, aOb, _, _ = self.performActions(dAction, aAction, dOb, aOb)
 
-        payout = self.defenderUtility
+        defenderPayout = self.defenderUtility
         self.restartGame()
 
-        return payout
+        return defenderPayout
 
     # --------------------------------------------------------------------------
     def getOracleScore(self, player, ids, map, mix, oracle, epochs=10):
         """
-        Returns the utility of an oracle vs. a mixed strategy
+        Returns the positive utility of an oracle vs. a mixed strategy
         """
         bestUtility = None
         bestOracle = None
@@ -201,7 +216,7 @@ class SequentialZeroSumSSG(object):
             for timestep in range(self.timesteps):
                 aAction = aAgent.getAction(self, aOb)
                 dAction = dAgent.getAction(self, dOb)
-                dOb, aOb, _ = self.performActions(dAction, aAction, dOb, aOb)
+                dOb, aOb, _, _ = self.performActions(dAction, aAction, dOb, aOb)
             avgUtility += self.defenderUtility * player
             self.restartGame()
 

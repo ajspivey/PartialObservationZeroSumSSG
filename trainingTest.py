@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 # Internal
 import ssg
 import attackerOracle as aO
-from attackerOracle import AttackerOracle, AttackerEquilibrium
+from attackerOracle import AttackerOracle
 import defenderOracle as dO
-from defenderOracle import DefenderOracle, DefenderEquilibrium
+from defenderOracle import DefenderOracle
 import coreLP
 import torch
 from torch import autograd
@@ -23,8 +23,6 @@ from random import Random
 # +++++++
 
 Transition = namedtuple('Transition', ('ob0', 'action0', 'ob1', 'action1', 'reward', 'ob2', 'newStateActions'))
-
-np.random.seed(1)
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -58,14 +56,17 @@ def main():
     timesteps = 2
     # +++++++++++++++
 
-
     # ==========================================================================
     # CREATE GAME
     # ==========================================================================
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     # Used to do consistent testing and comparisons
-    game.defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
-    game.defenderPenalties = [10.12675036, 17.93247563, 0.44160624, 7.40201997]
+    defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
+    defenderPenalties = [ 8.19103865,  5.52459114, 10.12675036, 17.93247563]
+
+    print(defenderRewards)
+    print(defenderPenalties)
+
     print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
     payoutMatrix = {}
     attackerMixedStrategy = None
@@ -193,9 +194,9 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
             action0 = game.previousDefenderAction
             ob1 = dOb
             action1 = dAction
-            dOb, aOb, reward = game.performActions(dAction, aAction, dOb, aOb)
+            dOb, aOb, dScore, aScore = game.performActions(dAction, aAction, dOb, aOb)
 
-            replayMemory.push(ob0, action0, ob1, action1, reward, dOb, game.getValidActions(ssg.DEFENDER))
+            replayMemory.push(ob0, action0, ob1, action1, dScore, dOb, game.getValidActions(ssg.DEFENDER))
 
             # Sample a random minibatch of transitions from replay memory
             avgLoss = 0
@@ -244,7 +245,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
     plt.ylabel('Loss')
     plt.show()
 
-def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=200, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=30, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
@@ -281,10 +282,9 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
             action0 = game.previousAttackerAction
             ob1 = aOb
             action1 = aAction
-            dOb, aOb, defenderReward = game.performActions(dAction, aAction, dOb, aOb)
-            reward = -defenderReward
+            dOb, aOb, dScore, aScore = game.performActions(dAction, aAction, dOb, aOb)
 
-            replayMemory.push(ob0, action0, ob1, action1, reward, dOb, game.getValidActions(ssg.ATTACKER))
+            replayMemory.push(ob0, action0, ob1, action1, aScore, dOb, game.getValidActions(ssg.ATTACKER))
 
             # Sample a random minibatch of transitions from replay memory
             avgLoss = 0
@@ -298,12 +298,12 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
                         y += max([targetNetwork.forward(sample.ob1, sample.ob2, sample.action1, newAction) for newAction in sample.newStateActions])
                     else:
                         y = torch.tensor(y)
+                    y = y.float()
                     guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
                     loss = lossFunction(guess, y)
                     avgLoss += loss.item()
                     loss.backward()
                 optimizer.step()
-                print()
             oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
             # equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
             history.append(oracleScore)
@@ -334,66 +334,66 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
     plt.ylabel('Loss')
     plt.show()
 
-def getBaselineScore(player, ids, map, mix, game, pool, epochs=20):
-    # Calculate average utility for each oracle in the list
-    avgUtility = 0
-    for epoch in range(epochs):
-        equilibriumAgents = ids.copy()
-        equilibriumDistribution = mix.copy()
-
-        dOb, aOb = game.getEmptyObservations()
-
-        # Choose the agent from the mixed strategy
-        choice = np.random.choice(ids, 1, p=mix)[0]
-        eAgent = map[choice]
-
-        # Play a full game
-        for timestep in range(game.timesteps):
-            if player == ssg.DEFENDER:
-                pOb = dOb
-                eOb = aOb
-            else:
-                pOb = aOb
-                eOb = dOb
-            eAction = eAgent.getAction(game, eOb)
-            # THIS IS DIFFERENT FOR ATTACKER
-            if (player == ssg.DEFENDER):
-                for eId in equilibriumAgents:
-                    agent = map[eId]
-                    action = agent.getAction(game, eOb)
-                    if action != eAction:
-                        equilibriumAgents.remove(eId)
-                        equilibriumDistribution.pop(eId)
-                equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
-            else:
-                obAction = pOb[:game.numTargets]
-                target = eAction * obAction
-                for eId in equilibriumAgents:
-                    agent = map[eId]
-                    action = agent.getAction(game, eOb)
-                    if not np.array_equal((action * obAction),target):
-                        equilibriumAgents.remove(eId)
-                        equilibriumDistribution.pop(eId)
-                equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
-
-            # Calculate the best response
-            pActions = [playerAgent.getAction(game, dOb) for playerAgent in pool]
-            actionScores = [game.getActionScore(player, pAction, eAction, game.defenderRewards, game.defenderPenalties) for pAction in pActions]
-            for i in range(len(equilibriumDistribution)):
-                actionScores[i] = actionScores[i] * equilibriumDistribution[i]
-            pAction = pActions[np.argmax(actionScores)]
-            if player == ssg.DEFENDER:
-                dAction = pAction
-                aAction = eAction
-            else:
-                dAction = eAction
-                aAction = pAction
-            dOb, aOb, _ = game.performActions(dAction, aAction, dOb, aOb)
-        avgUtility += game.defenderUtility * player
-        game.restartGame()
-
-    avgUtility = avgUtility / epochs
-    return avgUtility
+# def getBaselineScore(player, ids, map, mix, game, pool, epochs=20):
+#     # Calculate average utility for each oracle in the list
+#     avgUtility = 0
+#     for epoch in range(epochs):
+#         equilibriumAgents = ids.copy()
+#         equilibriumDistribution = mix.copy()
+#
+#         dOb, aOb = game.getEmptyObservations()
+#
+#         # Choose the agent from the mixed strategy
+#         choice = np.random.choice(ids, 1, p=mix)[0]
+#         eAgent = map[choice]
+#
+#         # Play a full game
+#         for timestep in range(game.timesteps):
+#             if player == ssg.DEFENDER:
+#                 pOb = dOb
+#                 eOb = aOb
+#             else:
+#                 pOb = aOb
+#                 eOb = dOb
+#             eAction = eAgent.getAction(game, eOb)
+#             # THIS IS DIFFERENT FOR ATTACKER
+#             if (player == ssg.DEFENDER):
+#                 for eId in equilibriumAgents:
+#                     agent = map[eId]
+#                     action = agent.getAction(game, eOb)
+#                     if action != eAction:
+#                         equilibriumAgents.remove(eId)
+#                         equilibriumDistribution.pop(eId)
+#                 equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
+#             else:
+#                 obAction = pOb[:game.numTargets]
+#                 target = eAction * obAction
+#                 for eId in equilibriumAgents:
+#                     agent = map[eId]
+#                     action = agent.getAction(game, eOb)
+#                     if not np.array_equal((action * obAction),target):
+#                         equilibriumAgents.remove(eId)
+#                         equilibriumDistribution.pop(eId)
+#                 equilibriumDistribution = [float(p)/sum(equilibriumDistribution) for p in equilibriumDistribution]
+#
+#             # Calculate the best response
+#             pActions = [playerAgent.getAction(game, dOb) for playerAgent in pool]
+#             actionScores = [game.getActionScore(pAction, eAction, game.defenderRewards, game.defenderPenalties) for pAction in pActions]
+#             for i in range(len(equilibriumDistribution)):
+#                 actionScores[i] = actionScores[i] * equilibriumDistribution[i]
+#             pAction = pActions[np.argmax(actionScores)]
+#             if player == ssg.DEFENDER:
+#                 dAction = pAction
+#                 aAction = eAction
+#             else:
+#                 dAction = eAction
+#                 aAction = pAction
+#             dOb, aOb, _ = game.performActions(dAction, aAction, dOb, aOb)
+#         avgUtility += game.defenderUtility * player
+#         game.restartGame()
+#
+#     avgUtility = avgUtility / epochs
+#     return avgUtility
 
 
 if __name__ == "__main__":

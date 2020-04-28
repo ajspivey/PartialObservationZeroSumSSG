@@ -69,7 +69,7 @@ def createDefenderOneShotModel(game):
     mD.add_constraint(sum(xD.values()) == 1)
     mD.add_constraints(xVal <= 1 for xVal in xD.values())
     mD.add_constraints(xVal >= 0 for xVal in xD.values())
-    mD.add_constraints(vD <= sum([xD[dAction] * game.getActionScore(ssg.DEFENDER, list(dAction), aAction, rewards, penalties) for dAction in defenderActions]) for aAction in attackerActions)
+    mD.add_constraints(vD <= sum([xD[dAction] * game.getActionScore(list(dAction)[0], aAction, rewards, penalties) for dAction in defenderActions]) for aAction in attackerActions)
 
     mD.maximize(vD)
     return mD, xD, [list(action) for action in defenderActions]
@@ -94,7 +94,7 @@ def createAttackerOneShotModel(game):
     mA.add_constraint(sum(xA.values()) == 1)
     mA.add_constraints(xVal <= 1 for xVal in xA.values())
     mA.add_constraints(xVal >= 0 for xVal in xA.values())
-    mA.add_constraints(vA <= sum([xA[aAction] * game.getActionScore(ssg.ATTACKER, dAction, list(aAction), rewards, penalties) for aAction in attackerActions]) for dAction in defenderActions)
+    mA.add_constraints(vA <= sum([xA[aAction] * game.getActionScore(dAction, list(aAction), rewards, penalties)[1] for aAction in attackerActions]) for dAction in defenderActions)
 
     mA.maximize(vA)
     return mA, xA, [list(action) for action in attackerActions]
