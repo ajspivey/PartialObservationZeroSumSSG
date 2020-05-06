@@ -1,15 +1,7 @@
 # ======
 # @TODO:
 # ======
-# Generalize attacker/defender specific functions using player
-# * -ssg-
-# * defender Oracle
-# * attacker oracle
-#
 # Remove unused functions
-# Standardize function parameter orders
-# standardize function parameters (player relative or not)
-# Standardize attacker/defender orders (defender before attacker?)
 # Add docstrings to all functions
 # Recomment
 # Clean up whitespace/make flow of functions clear
@@ -30,10 +22,11 @@ import defenderOracle as dO
 import coreLP
 import torch
 from torch import autograd
+import time
 
 # +++++++
 
-np.random.seed(1)
+np.random.seed(6)
 
 # ====
 # MAIN
@@ -53,8 +46,8 @@ def main():
     # ===============
     # HyperParameters
     # ===============
-    experimentIterations = 10
-    seedingIterations = 3
+    experimentIterations = 30
+    seedingIterations = 4
     targetNum = 4
     resources = 2
     timesteps = 2
@@ -65,12 +58,13 @@ def main():
     # CREATE GAME
     # ==========================================================================
     # Create a game with 4 targets, 2 resources, and 2 timesteps
+    tic = time.perf_counter()
     if showFrameworkOutput:
         print("Creating game...")
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     # Used to do consistent testing and comparisons
-    game.defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
-    game.defenderPenalties = [10.12675036, 17.93247563, 0.44160624, 7.40201997]
+    # game.defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
+    # game.defenderPenalties = [10.12675036, 17.93247563, 0.44160624, 7.40201997]
 
     if showFrameworkOutput:
         print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
@@ -118,6 +112,15 @@ def main():
             game.restartGame()
     if showFrameworkOutput:
         print("Payout matrix computed.")
+    csvFileThing = open("outputFiles/payoutMatrix.csv", "w", newline='')
+    csvWriterThing = csv.writer(csvFileThing, delimiter=',')
+    csvWriterThing.writerow(["Rewards",f"{defenderRewards}"])
+    csvWriterThing.writerow(["Penalties",f"{defenderPenalties}"])
+    csvWriterThing.writerow(["defenderID","attackerID","Value(Defender payoff)"])
+    for key in payoutMatrix.keys():
+        defenderID, attackerID = key
+        csvWriterThing.writerow([defenderID, attackerID, payoutMatrix[key]])
+    csvFileThing.close()
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
     # ==========================================================================
@@ -128,7 +131,7 @@ def main():
     if writeUtilityFile:
         csvFile = open("outputFiles/utilities.csv", "w", newline='')
         csvWriter = csv.writer(csvFile, delimiter=',')
-        csvWriter.writerow(["Defender Mixed Utility","Attacker Mixed Utility", "Avg. Defender Oracle Utility vs Mixed", "Avg Score of Best Defender Pure Strategy", "Avg. Attacker Oracle Utility vs Mixed", "Avg Score of Best Attacker Pure Strategy"])
+        csvWriter.writerow(["Defender Mixed Utility", "Expected Utility of Defender Oracle vs Attacker Mixed", "Expected Utility of Best Defender Pure Strategy", "Defender Mixed Strategy", "Attacker Mixed Utility", "Expected Utility of Attacker Oracle vs Defender Mixed", "Expected Utility of Best Attacker Pure Strategy", "Attacker Mixed Strategy"])
     for _ in range(experimentIterations):
         if showFrameworkOutput:
             print(f"iteration {_} of {experimentIterations}")
@@ -142,6 +145,8 @@ def main():
         defenderModel.solve()
         defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
         dUtility = float(dUtility)
+        print(f"DEFENDER UTILITY: {dUtility}")
+        print(f"DMIX: {defenderMixedStrategy}")
         if showFrameworkOutput:
             print("Defender mixed strategy computed.")
         # Compute the mixed attacker strategy
@@ -150,8 +155,9 @@ def main():
         attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
         attackerModel.solve()
         attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
-
         aUtility = float(aUtility)
+        print(f"ATTACKER UTILITY: {aUtility}")
+        print(f"ATTACKERMIX: {attackerMixedStrategy}")
         if showFrameworkOutput:
             print("Attacker mixed strategy computed.")
             print()
@@ -175,13 +181,10 @@ def main():
         parameters = bestDOracle.getState()
         newDOracle = dO.DefenderOracle(targetNum)
         newDOracle.setState(parameters)
-        dO.train(oracleToTrain=newDOracle, game=game, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, showOutput=showOracleTraining)
+        newDOracleScore = dO.train(oracleToTrain=newDOracle, aIds=attackerPureIds, aMap=attackerIdMap, attackerMixedStrategy=attackerMixedStrategy, game=game, dPool=defenderIdMap.values(), showOutput=showOracleTraining)
         # See the average payout of the new oracle
         if showFrameworkOutput:
             print("Defender oracle computed.")
-            print("Testing score of new oracle")
-        newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
-        if showFrameworkOutput:
             print(f"New Oracle Utility Computed: {newDOracleScore}")
 
         # --------
@@ -200,12 +203,9 @@ def main():
         parameters = bestAOracle.getState()
         newAOracle = aO.AttackerOracle(targetNum)
         newAOracle.setState(parameters)
-        aO.train(oracleToTrain=newAOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, showOutput=showOracleTraining)
+        newAOracleScore = aO.train(oracleToTrain=newAOracle, game=game, dIds=defenderPureIds, dMap=defenderIdMap, defenderMixedStrategy=defenderMixedStrategy, aPool=attackerIdMap.values(), showOutput=showOracleTraining)
         if showFrameworkOutput:
             print("Attacker oracle computed")
-            print("Testing score of new oracle")
-        newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
-        if showFrameworkOutput:
             print(f"New Oracle Utility Computed: {newAOracleScore}")
 
         # ---------
@@ -223,7 +223,7 @@ def main():
             print(f"D Oracle utility (Should be > avg Mixed): {dOracleUtility}")
             print(f"A Oracle utility (Should be > avg Mixed): {aOracleUtility}")
         if writeUtilityFile:
-            csvWriter.writerow([f"{dUtility}",f"{aUtility}",f"{newDOracleScore}",f"{bestDOracleUtility}",f"{newAOracleScore}",f"{bestAOracleUtility}"])
+            csvWriter.writerow([f"{dUtility}",f"{newDOracleScore}",f"{bestDOracleUtility}", f"{defenderMixedStrategy}", f"{aUtility}", f"{newAOracleScore}",f"{bestAOracleUtility}", f"{attackerMixedStrategy}"])
         # ----------------------------------------------------------------------
 
         # ----------------------------------------------------------------------
@@ -255,6 +255,8 @@ def main():
 
     if writeUtilityFile:
         csvFile.close()
+    toc = time.perf_counter()
+    print(f"TIME TO RUN: {toc - tic:0.4f} seconds")
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 # Potential functions to make things clearer
