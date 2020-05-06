@@ -1,0 +1,10 @@
+GAME
+3 seeding iterations
+4 targest
+2 resources
+2 timesteps
+Defender Rewards: [21.43407823, 36.29590018,  1.00560437, 15.81429606]
+Defender Penalties: [10.12675036, 17.93247563, 0.44160624, 7.40201997]
+
+ORACLES
+Training Epochs: 20
