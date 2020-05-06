@@ -1,6 +1,6 @@
 GAME
 3 seeding iterations
-4 targest
+4 targets
 2 resources
 2 timesteps
 Defender Rewards: [21.43407823, 36.29590018,  1.00560437, 15.81429606]
