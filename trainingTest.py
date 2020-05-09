@@ -43,154 +43,43 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
-# ====
-# MAIN
-# ====
-def main():
-    # ===============
-    # HyperParameters
-    # ===============
-    seedingIterations = 5
-    targetNum = 6
-    resources = 2
-    timesteps = 5
-    # +++++++++++++++
-    dEpochs = 50
-    aEpochs = 50
+def getTrainingGraph(player, game, ids, map, mix, pool, epochs=50):
+    if player == ssg.DEFENDER:
+        bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, ids, map, mix, pool)
+        parameters = bestDOracle.getState()
+        newDOracle = dO.DefenderOracle(game.numTargets)
+        newDOracle.setState(parameters)
+        return defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs)
+    else:
+        bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, ids, map, mix, pool)
+        parameters = bestAOracle.getState()
+        newAOracle = aO.AttackerOracle(game.numTargets)
+        newAOracle.setState(parameters)
+        return attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs)
 
-    # ==========================================================================
-    # CREATE GAME
-    # ==========================================================================
-    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
-    # Used to do consistent testing and comparisons
-    # defenderRewards = [21.43407823, 36.29590018,  1.00560437, 15.81429606]
-    # defenderPenalties = [ 8.19103865,  5.52459114, 10.12675036, 17.93247563]
+def showGraphs(graphs):
+    i = 1
+    for graph in graphs:
+        player, graphSize, history, lossHistory, baselineHistory = graph
+        playerName = "Defender"
+        if player == ssg.ATTACKER:
+            playerName = "Attacker"
+        # Plot the stuff
+        baselineGraph = plt.figure(i)
+        plt.plot(range(graphSize), history, 'g', label=f'{playerName} Oracle Utility')
+        plt.plot(range(graphSize), baselineHistory, 'r', label='Myopic Baseline Utility')
+        plt.title(f'{playerName} Oracle Utility vs. Myopic Baseline')
+        plt.xlabel('Minibatches Trained')
+        plt.ylabel('Utility')
+        plt.legend()
 
-    print(defenderRewards)
-    print(defenderPenalties)
+        lossGraph = plt.figure(i + 1)
+        plt.plot(range(graphSize), lossHistory, 'r', label=f'{playerName} Oracle Loss')
+        plt.title(f'{playerName} Oracle Loss')
+        plt.xlabel('Minibatches Trained')
+        plt.ylabel('Loss')
 
-    print(f"Defender Rewards: {defenderRewards}\n Defender penalties: {defenderPenalties}")
-    payoutMatrix = {}
-    attackerMixedStrategy = None
-    defenderMixedStrategy = None
-    newDefenderId = 0
-    newAttackerId = 0
-    attackerPureIds = []
-    defenderPureIds = []
-    attackerIdMap = {}
-    defenderIdMap = {}
-    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-    # ==========================================================================
-    # GENERATE INITIAL PURE STRATEGIES
-    # ==========================================================================
-    # Start with a 5 random attacker pure strategies and 5 random defender pure strategies
-    for _ in range(seedingIterations):
-        attackerOracle = aO.AttackerOracle(targetNum)
-        defenderOracle = dO.DefenderOracle(targetNum)
-        attackerPureIds.append(newAttackerId)
-        defenderPureIds.append(newDefenderId)
-        attackerIdMap[newAttackerId] = attackerOracle
-        defenderIdMap[newDefenderId] = defenderOracle
-        newAttackerId += 1
-        newDefenderId += 1
-    print("Strategies seeded.")
-
-    # Compute the payout matrix for each pair of strategies
-    for attackerId in attackerPureIds:
-        pureAttacker = attackerIdMap[attackerId]
-        for defenderId in defenderPureIds:
-            pureDefender = defenderIdMap[defenderId]
-            value = game.getPayout(pureDefender, pureAttacker).item()
-            payoutMatrix[defenderId,attackerId] = value
-            game.restartGame()
-    print("Payout matrix computed.")
-    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-    # ==========================================================================
-    # ALGORITHM ITERATIONS
-    # ==========================================================================
-    # ----------------------------------------------------------------------
-    # CORELP
-    # ----------------------------------------------------------------------
-    # Compute the mixed defender strategy
-    defenderModel, dStrategyDistribution, dUtility = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    defenderModel.solve()
-    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
-    dUtility = float(dUtility)
-    print("Defender mixed strategy computed.")
-    # Compute the mixed attacker strategy
-    attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    attackerModel.solve()
-    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
-    aUtility = float(aUtility)
-    print("Attacker mixed strategy computed.")
-    # ----------------------------------------------------------------------
-
-    # ----------------------------------------------------------------------
-    # ORACLES
-    # ----------------------------------------------------------------------
-    # --------
-    # DEFENDER
-    # --------
-    # Find the best oracle we currently have (to base training off of)
-    bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values())
-    print(f"Best D Oracle: {bestDOracle}, bestUtility: {bestDOracleUtility}")
-    parameters = bestDOracle.getState()
-    newDOracle = dO.DefenderOracle(targetNum)
-    newDOracle.setState(parameters)
-    dHistory, dLossHistory, dMyopicHistory = defenderTrain(newDOracle, attackerPureIds, attackerIdMap, attackerMixedStrategy, game, defenderIdMap.values(), epochs=dEpochs)
-    newDOracleScore = game.getOracleScore(ssg.DEFENDER, ids=attackerPureIds, map=attackerIdMap, mix=attackerMixedStrategy, oracle=newDOracle)
-    print(f"New D Oracle Utility Computed: {newDOracleScore}")
-
-    # --------
-
-    # --------
-    # ATTACKER
-    # --------
-    # Find the best oracle we currently have (to base training off of)
-    bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values())
-    print(f"Best A Oracle: {bestAOracle}, bestUtility: {bestAOracleUtility}")
-    parameters = bestAOracle.getState()
-    newAOracle = aO.AttackerOracle(targetNum)
-    newAOracle.setState(parameters)
-    aHistory, aLossHistory, aMyopicHistory = attackerTrain(newAOracle, defenderPureIds, defenderIdMap, defenderMixedStrategy, game, attackerIdMap.values(), epochs=aEpochs)
-    newAOracleScore = game.getOracleScore(ssg.ATTACKER, ids=defenderPureIds, map=defenderIdMap, mix=defenderMixedStrategy, oracle=newAOracle)
-    print(f"New A Oracle Utility Computed: {newAOracleScore}")
-    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-    # Plot the stuff
-    print(f"DEFENDER ORACLE SCORE: {newDOracleScore}")
-    print(f"DEFENDER BASELINE SCORE: {dMyopicHistory[0]}")
-    fig1 = plt.figure(1)
-    plt.plot(range(dEpochs * game.timesteps), dHistory, 'g', label='Defender Oracle Utility')
-    plt.plot(range(dEpochs * game.timesteps), dMyopicHistory, 'r', label='Myopic Baseline Utility')
-    plt.title('Defender Oracle Utility vs. Myopic Baseline')
-    plt.xlabel('Minibatches Trained')
-    plt.ylabel('Utility')
-    plt.legend()
-
-    fig2 = plt.figure(2)
-    plt.plot(range(dEpochs * game.timesteps), dLossHistory, 'r', label='Defender Oracle Loss')
-    plt.title('Defender Oracle Loss')
-    plt.xlabel('Minibatches Trained')
-    plt.ylabel('Loss')
-
-    print(f"ATTACKER ORACLE SCORE: {newAOracleScore}")
-    print(f"ATTACKER BASELINE SCORE: {aMyopicHistory[0]}")
-    fig1 = plt.figure(3)
-    plt.plot(range(aEpochs * game.timesteps), aHistory, 'g', label='Attacker Oracle Utility')
-    plt.plot(range(aEpochs * game.timesteps), aMyopicHistory, 'r', label='Myopic Baseline Utility')
-    plt.title('Attacker Oracle Utility vs. Myopic Baseline')
-    plt.xlabel('Minibatches Trained')
-    plt.ylabel('Utility')
-    plt.legend()
-
-    fig2 = plt.figure(4)
-    plt.plot(range(aEpochs * game.timesteps), aLossHistory, 'r', label='Attacker Oracle Loss')
-    plt.title('Attacker Oracle Loss')
-    plt.xlabel('Minibatches Trained')
-    plt.ylabel('Loss')
+        i += 2
     plt.show()
 
 
@@ -262,9 +151,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, attackerMixedStrategy, game, dPool,
             if step == C:
                 targetNetwork.setState(oracleToTrain.getState())
                 step = 0
-
         game.restartGame()
-
     return history, lossHistory, equilibriumHistory
 
 def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
@@ -409,6 +296,88 @@ def getBaselineScore(player, ids, map, mix, game, pool):
             game.restartGame()
     return totalExpectedUtility
 
+
+# ====
+# MAIN
+# ====
+def main():
+    # ---------------
+    # HyperParameters
+    # ---------------
+    seedingIterations = 2
+    targetNum = 6
+    resources = 2
+    timesteps = 5
+    timesteps2 = 2
+    dEpochs = 50
+    aEpochs = 50
+    # ---------------
+    # CREATE GAME
+    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
+    payoutMatrix = {}
+    attackerMixedStrategy = None
+    defenderMixedStrategy = None
+    newDefenderId = 0
+    newAttackerId = 0
+    attackerPureIds = []
+    defenderPureIds = []
+    attackerIdMap = {}
+    defenderIdMap = {}
+    # Seeding
+    for _ in range(seedingIterations):
+        attackerOracle = aO.AttackerOracle(targetNum)
+        defenderOracle = dO.DefenderOracle(targetNum)
+        attackerPureIds.append(newAttackerId)
+        defenderPureIds.append(newDefenderId)
+        attackerIdMap[newAttackerId] = attackerOracle
+        defenderIdMap[newDefenderId] = defenderOracle
+        newAttackerId += 1
+        newDefenderId += 1
+    # payout matrix
+    for attackerId in attackerPureIds:
+        pureAttacker = attackerIdMap[attackerId]
+        for defenderId in defenderPureIds:
+            pureDefender = defenderIdMap[defenderId]
+            value = game.getPayout(pureDefender, pureAttacker).item()
+            payoutMatrix[defenderId,attackerId] = value
+            game.restartGame()
+    # coreLP
+    defenderModel, dStrategyDistribution, dUtility = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
+    defenderModel.solve()
+    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
+    dUtility = float(dUtility)
+    attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
+    attackerModel.solve()
+    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
+    aUtility = float(aUtility)
+    # ----------------------------------------------------------------------
+    # Get the defender and attacker graphs
+    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
+    aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
+    # Get graphs for when the game only has 2 steps
+    game.timesteps = timesteps2
+    for attackerId in attackerPureIds:
+        pureAttacker = attackerIdMap[attackerId]
+        for defenderId in defenderPureIds:
+            pureDefender = defenderIdMap[defenderId]
+            value = game.getPayout(pureDefender, pureAttacker).item()
+            payoutMatrix[defenderId,attackerId] = value
+            game.restartGame()
+    # coreLP
+    defenderModel, dStrategyDistribution, dUtility = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
+    defenderModel.solve()
+    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
+    dUtility = float(dUtility)
+    attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
+    attackerModel.solve()
+    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
+    aUtility = float(aUtility)
+    dHistory2, dLossHistory2, dBaselineHistory2 = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
+    aHistory2, aLossHistory2, aBaselineHistory2 = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
+    # Build the graphs
+    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory), (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
+    # Show the graphs
+    showGraphs(graphs)
 
 if __name__ == "__main__":
     main()
