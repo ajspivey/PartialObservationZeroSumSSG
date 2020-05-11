@@ -304,7 +304,7 @@ def main():
     # ---------------
     # HyperParameters
     # ---------------
-    seedingIterations = 2
+    seedingIterations = 5
     targetNum = 6
     resources = 2
     timesteps = 5
