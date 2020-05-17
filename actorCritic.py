@@ -42,3 +42,24 @@ def getInputTensor(oldObservation, observation, oldAction, action):
     new = torch.cat((newObservationTensor, newActionTensor),0)
 
     return torch.cat((old.unsqueeze(0), new.unsqueeze(0)))
+
+# Learns from a batch in the replay memory and returns the average loss
+def sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=15):
+    avgLoss = 0
+    if len(replayMemory) >= batchSize:
+        minibatch = replayMemory.sample(batchSize)
+        optimizer.zero_grad()
+        for sample in minibatch:
+            # For each thing in the minibatch, calculate the true label using Q^ (target network)
+            y = sample.reward
+            if timestep != game.timesteps -1:
+                y += max([targetNetwork.forward(sample.ob1, sample.ob2, sample.action1, newAction) for newAction in sample.newStateActions])
+            else:
+                y = torch.tensor(y)
+            y = y.float()
+            guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
+            loss = lossFunction(guess, y)
+            avgLoss += loss.item()
+            loss.backward()
+        optimizer.step()
+    return avgLoss

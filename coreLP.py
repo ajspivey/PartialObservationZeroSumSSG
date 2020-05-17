@@ -7,7 +7,7 @@ from docplex.mp.model import Model
 # ==============================================================================
 # CLASSES
 # ==============================================================================
-def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
+def createDefenderModel(dIds, dMap, aIds, aMap, payoutMatrix, export=False):
     """Creates a model for solving the equilibrium of an ssg with a restricted
     domain of pure strategies (trained neural networks) for each player."""
     # Create a cplex model
@@ -22,12 +22,18 @@ def createDefenderModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mD.add_constraints(vD <= sum([xD[dId] * payoutMatrix[dId, aId] for dId in dIds]) for aId in aIds)
 
     mD.maximize(vD)
-
-    mD.export("defenderModel.lp")
-
+    if export:
+        mD.export("defenderModel.lp")
     return mD, xD, vD
 
-def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
+def getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export=False):
+    defenderModel, dStrategyDistribution, dUtility = createDefenderModel(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    defenderModel.solve()
+    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
+    dUtility = float(dUtility)
+    return defenderMixedStrategy, dUtility
+
+def createAttackerModel(dIds, dMap, aIds, aMap, payoutMatrix, export=False):
     """Creates a model for solving the equilibrium of an ssg with a restricted
     domain of pure strategies (trained neural networks) for each player."""
     # Create a cplex model
@@ -42,7 +48,13 @@ def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mA.add_constraints(vA <= sum([xA[aId] * -payoutMatrix[dId, aId] for aId in aIds]) for dId in dIds)
 
     mA.maximize(vA)
-
-    mA.export("attackerModel.lp")
-
+    if export:
+        mA.export("attackerModel.lp")
     return mA, xA, vA
+
+def getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export=False):
+    attackerModel, aStrategyDistribution, aUtility = createAttackerModel(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    attackerModel.solve()
+    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
+    aUtility = float(aUtility)
+    return attackerMixedStrategy, aUtility

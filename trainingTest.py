@@ -5,25 +5,25 @@
 import numpy as np
 import matplotlib.pyplot as plt
 # Internal
-from actorCritic import Transition, ReplayMemory, getInputTensor
+import ssg
+from coreLP import getAttackerMixedStrategy, getDefenderMixedStrategy
 from attackerOracle import AttackerOracle, attackerTrain
 from defenderOracle import DefenderOracle, defenderTrain
-# +++++++
+from experiment import calculatePayoutMatrix, seedInitialPureStrategies
 
-def getTrainingGraph(player, game, ids, map, mix, pool, epochs=50):
+def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50):
     if player == ssg.DEFENDER:
         bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, ids, map, mix, pool)
         parameters = bestDOracle.getState()
-        newDOracle = dO.DefenderOracle(game.numTargets)
+        newDOracle = DefenderOracle(game.numTargets)
         newDOracle.setState(parameters)
-        return defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs)
-        # return createBaseline(dO.DefenderOracle(game.numTargets), ids, map, mix, game, pool)
+        return defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True)
     else:
         bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, ids, map, mix, pool)
         parameters = bestAOracle.getState()
-        newAOracle = aO.AttackerOracle(game.numTargets)
+        newAOracle = AttackerOracle(game.numTargets)
         newAOracle.setState(parameters)
-        return attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs)
+        return attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True)
 
 def showGraphs(graphs):
     i = 1
@@ -54,81 +54,45 @@ def showGraphs(graphs):
 # MAIN
 # ====
 def main():
+    # =========
+    # DEBUGGING
+    # =========
+    export = False
+    # +++++++++
     # ---------------
     # HyperParameters
     # ---------------
-    seedingIterations = 5
-    targetNum = 6
+    seedingIterations = 3
+    targetNum = 4
     resources = 2
-    timesteps = 5
+    timesteps = 3
     timesteps2 = 2
     dEpochs = 50
     aEpochs = 50
     # ---------------
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
-    payoutMatrix = {}
-    attackerMixedStrategy = None
-    defenderMixedStrategy = None
-    newDefenderId = 0
-    newAttackerId = 0
-    attackerPureIds = []
-    defenderPureIds = []
-    attackerIdMap = {}
-    defenderIdMap = {}
-    # Seeding
-    for _ in range(seedingIterations):
-        attackerOracle = aO.AttackerOracle(targetNum)
-        defenderOracle = dO.DefenderOracle(targetNum)
-        attackerPureIds.append(newAttackerId)
-        defenderPureIds.append(newDefenderId)
-        attackerIdMap[newAttackerId] = attackerOracle
-        defenderIdMap[newDefenderId] = defenderOracle
-        newAttackerId += 1
-        newDefenderId += 1
-    # payout matrix
-    for attackerId in attackerPureIds:
-        pureAttacker = attackerIdMap[attackerId]
-        for defenderId in defenderPureIds:
-            pureDefender = defenderIdMap[defenderId]
-            value = game.getPayout(pureDefender, pureAttacker).item()
-            payoutMatrix[defenderId,attackerId] = value
-            game.restartGame()
+    newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
+    payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
     # coreLP
-    defenderModel, dStrategyDistribution, dUtility = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    defenderModel.solve()
-    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
-    dUtility = float(dUtility)
-    attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    attackerModel.solve()
-    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
-    aUtility = float(aUtility)
+    dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
-    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
-    aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
-    Get graphs for when the game only has 2 steps
-    game.timesteps = timesteps2
-    for attackerId in attackerPureIds:
-        pureAttacker = attackerIdMap[attackerId]
-        for defenderId in defenderPureIds:
-            pureDefender = defenderIdMap[defenderId]
-            value = game.getPayout(pureDefender, pureAttacker).item()
-            payoutMatrix[defenderId,attackerId] = value
-            game.restartGame()
-    # coreLP
-    defenderModel, dStrategyDistribution, dUtility = coreLP.createDefenderModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    defenderModel.solve()
-    defenderMixedStrategy = [float(value) for value in dStrategyDistribution.values()]
-    dUtility = float(dUtility)
-    attackerModel, aStrategyDistribution, aUtility = coreLP.createAttackerModel(attackerPureIds, attackerIdMap, defenderPureIds, defenderIdMap, payoutMatrix)
-    attackerModel.solve()
-    attackerMixedStrategy = [float(value) for value in aStrategyDistribution.values()]
-    aUtility = float(aUtility)
-    dHistory2, dLossHistory2, dBaselineHistory2 = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
-    aHistory2, aLossHistory2, aBaselineHistory2 = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
+    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=50, epochs=dEpochs)
+    aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
+    # Get graphs for when the game only has 2 steps
+    # game.timesteps = timesteps2
+    # newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
+    # payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
+    # # coreLP
+    # dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    # aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    # dHistory2, dLossHistory2, dBaselineHistory2 = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
+    # aHistory2, aLossHistory2, aBaselineHistory2 = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
     # Build the graphs
-    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory), (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
+    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory)]
+    # , (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
     # Show the graphs
     showGraphs(graphs)
 

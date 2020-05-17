@@ -9,7 +9,8 @@ import torch.optim as optim
 
 # Internal Imports
 import ssg
-from actorCritic import getInputTensor, Transition, ReplayMemory
+from actorCritic import getInputTensor, Transition, ReplayMemory, sampleMinibatch
+from baseline import getBaselineScore
 
 # Set the random seed
 torch.manual_seed(1)
@@ -70,7 +71,7 @@ class AttackerOracle(nn.Module):
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
+def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
@@ -80,7 +81,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
     equilibriumHistory = []
 
     gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
-    equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
+    equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -95,7 +96,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
         print(f"epoch {epoch} of {epochs}")
         # initialize the starting values for the game
         dOb, aOb = game.getEmptyObservations()
-        defenderAgent = dMap[np.random.choice(dIds, 1, p=defenderMixedStrategy)[0]]
+        defenderAgent = dMap[np.random.choice(dIds, 1, p=dMix)[0]]
 
         for timestep in range(game.timesteps):                                  # Play a full game
             # Choose an action based off of Q network (oracle to train)
@@ -108,29 +109,13 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
             ob1 = aOb
             action1 = aAction
             dOb, aOb, dScore, aScore = game.performActions(dAction, aAction, dOb, aOb)
-
             replayMemory.push(ob0, action0, ob1, action1, aScore, dOb, game.getValidActions(ssg.ATTACKER))
 
             # Sample a random minibatch of transitions from replay memory
-            avgLoss = 0
-            if len(replayMemory) >= batchSize:
-                minibatch = replayMemory.sample(batchSize)
-                optimizer.zero_grad()
-                for sample in minibatch:
-                    # For each thing in the minibatch, calculate the true label using Q^ (target network)
-                    y = sample.reward
-                    if timestep != game.timesteps -1:
-                        y += max([targetNetwork.forward(sample.ob1, sample.ob2, sample.action1, newAction) for newAction in sample.newStateActions])
-                    else:
-                        y = torch.tensor(y)
-                    y = y.float()
-                    guess = oracleToTrain.forward(sample.ob0, sample.ob1, sample.action0, sample.action1)
-                    loss = lossFunction(guess, y)
-                    avgLoss += loss.item()
-                    loss.backward()
-                optimizer.step()
+            avgLoss = sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=batchSize)
+
             if trainingTest:
-                oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
+                oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, dMix, oracleToTrain)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
                 equilibriumHistory.append(equilibriumScore)
@@ -143,4 +128,4 @@ def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool,
         game.restartGame()
     if trainingTest:
         return history, lossHistory, equilibriumHistory
-    return game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
+    return game.getOracleScore(ssg.ATTACKER, dIds, dMap, dMix, oracleToTrain)
