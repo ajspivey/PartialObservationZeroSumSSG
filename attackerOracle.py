@@ -5,23 +5,16 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import torch.autograd as autograd
-from collections import namedtuple
-import random
-from random import Random
 
 # Internal Imports
 import ssg
+from actorCritic import getInputTensor, Transition, ReplayMemory
 
 # Set the random seed
 torch.manual_seed(1)
 np.random.seed(1)
 
-torch.autograd.set_detect_anomaly(True)
-
-Transition = namedtuple('Transition', ('ob0', 'action0', 'ob1', 'action1', 'reward', 'ob2', 'newStateActions'))
 # ==============================================================================
 # CLASSES
 # ==============================================================================
@@ -74,47 +67,20 @@ class AttackerOracle(nn.Module):
         state = self.state_dict()
         return state
 
-# ------------------------------------------------------------------------------
-class ReplayMemory(object):
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def push(self, *args):
-        """Saves a transition."""
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = Transition(*args)
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def getInputTensor(oldObservation, observation, oldAction, action):
-    oldActionTensor = torch.tensor(oldAction).float().requires_grad_(True)
-    newActionTensor = torch.tensor(action).float().requires_grad_(True)
-    oldObservationTensor = torch.from_numpy(oldObservation).float().requires_grad_(True)
-    newObservationTensor = torch.from_numpy(observation).float().requires_grad_(True)
-
-    old = torch.cat((oldObservationTensor, oldActionTensor),0)
-    new = torch.cat((newObservationTensor, newActionTensor),0)
-
-    return torch.cat((old.unsqueeze(0), new.unsqueeze(0)))
-
-
-def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False):
+def attackerTrain(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
+    history = []
+    lossHistory = []
+    equilibriumHistory = []
+
     gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+    equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -163,6 +129,11 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, 
                     avgLoss += loss.item()
                     loss.backward()
                 optimizer.step()
+            if trainingTest:
+                oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
+                history.append(oracleScore)
+                lossHistory.append(avgLoss/batchSize)
+                equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -170,16 +141,6 @@ def train(oracleToTrain, dIds, dMap, defenderMixedStrategy, game, aPool, N=100, 
                 step = 0
 
         game.restartGame()
-
-    oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)
-    return oracleScore
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
-def main():
-    pass
-
-
-if __name__ == "__main__":
-    main()
+    if trainingTest:
+        return history, lossHistory, equilibriumHistory
+    return game.getOracleScore(ssg.ATTACKER, dIds, dMap, defenderMixedStrategy, oracleToTrain)

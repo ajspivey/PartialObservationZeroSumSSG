@@ -1,16 +1,13 @@
 # ==============================================================================
 # IMPORTS
 # ==============================================================================
+# External
 from itertools import combinations
 import numpy as np
-import random
 import torch
-from torch.autograd import Variable
 
 np.random.seed(1)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 
 # ==============================================================================
 # CONSTANTS
@@ -73,27 +70,6 @@ class SequentialZeroSumSSG(object):
             for i in positions:
                 p[i] = 1
             yield p
-    # --------------------------------------------------------------------------
-    def playerToAttDef(player, pAction=None, eAction=None, pOb=None, eOb=None):
-        """
-        Converts player and enemy observations and actions to concrete.
-        returns (dAction, aAction, dOb, aOb)
-        """
-        if player == DEFENDER:
-            return (pAction, eAction, pOb, eOb)
-        else:
-            return (eAction, pAction, eOb, pOb)
-    # --------------------------------------------------------------------------
-    def attDefToPlayer(player, dAction=None, aAction=None, dOb=None, aOb=None):
-        """
-        Converts defender and attacker observations and actions to player-based.
-        returns (pAction, eAction, pOb, eOb)
-        """
-        if player == DEFENDER:
-            return (dAction, aAction, dOb, aOb)
-        else:
-            return (aAction, dAction, aOb, eOb)
-
 
     # -------------------------------
     # Public Functions (External Use)

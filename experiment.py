@@ -1,14 +1,3 @@
-# ======
-# @TODO:
-# ======
-# Remove unused functions
-# Add docstrings to all functions
-# Recomment
-# Clean up whitespace/make flow of functions clear
-# Create functions in experiment file?
-# ++++++
-
-
 # =======
 # IMPORTS
 # =======
@@ -122,6 +111,10 @@ def main():
         csvWriterThing.writerow([defenderID, attackerID, payoutMatrix[key]])
     csvFileThing.close()
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    #
+    # WARM UP PHASE (myopic play)
+    #
 
     # ==========================================================================
     # ALGORITHM ITERATIONS

@@ -3,14 +3,6 @@
 # ==============================================================================
 # External imports
 from docplex.mp.model import Model
-import numpy as np
-
-# Internal Imports
-import ssg
-
-# Set the random seed
-rnd = np.random
-rnd.seed(0)
 
 # ==============================================================================
 # CLASSES
@@ -54,12 +46,3 @@ def createAttackerModel(aIds, aMap, dIds, dMap, payoutMatrix):
     mA.export("attackerModel.lp")
 
     return mA, xA, vA
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
-def main():
-    pass
-
-if __name__ == "__main__":
-    main()
