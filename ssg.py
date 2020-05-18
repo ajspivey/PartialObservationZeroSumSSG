@@ -241,3 +241,23 @@ def createRandomGame(targets=5, resources=None, timesteps=None):
     game = SequentialZeroSumSSG(targets, resources, defenderRewards, defenderPenalties, timesteps)
     return game, defenderRewards, defenderPenalties
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ------------------------------------------------------------------------------
+def cloneGame(game):
+    """
+    Clones the state of a game
+    """
+    gameClone = SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+    cloneGameState(gameClone, game)
+    return gameClone
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+def cloneGameState(game1, game2):
+    game1.currentTimestep = game2.currentTimestep
+    game1.targets = game2.targets
+    game1.availableResources = game2.availableResources
+    game1.pastAttacks = game2.pastAttacks
+    game1.pastAttackStatuses = game2.pastAttackStatuses
+    game1.defenderUtility = game2.defenderUtility
+    game1.previousAttackerAction = game2.previousAttackerAction
+    game1.previousDefenderAction = game2.previousDefenderAction
+    game1.previousAttackerObservation = game2.previousAttackerObservation
+    game1.previousDefenderObservation = game2.previousDefenderObservation

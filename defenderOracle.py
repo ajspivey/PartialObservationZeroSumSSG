@@ -75,12 +75,13 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
-    history = []
-    lossHistory = []
-    equilibriumHistory = []
 
-    gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
-    equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
+    if trainingTest:
+        history = []
+        lossHistory = []
+        equilibriumHistory = []
+        gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+        equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -114,7 +115,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
             avgLoss = sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=batchSize)
 
             if trainingTest:
-                oracleScore = game.getOracleScore(ssg.DEFENDER, aIds, aMap, aMix, oracleToTrain)
+                oracleScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, aMix, oracleToTrain)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
                 equilibriumHistory.append(equilibriumScore)

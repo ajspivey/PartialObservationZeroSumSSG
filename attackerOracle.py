@@ -44,7 +44,6 @@ class AttackerOracle(nn.Module):
         CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.input_size*self.featureCount).unsqueeze(1)
         # LSTM
         LSTMOut, _ = self.LSTM(CReLU)
-        # sequenceSize, batchSize, numberOfOutputFeatures = LSTMOut.size(0), LSTMOut.size(1), LSTMOut.size(2)
         LSTMOut = torch.flatten(LSTMOut)
         # Output
         output = self.outputLinearLayer(LSTMOut)
@@ -55,7 +54,7 @@ class AttackerOracle(nn.Module):
         return self.getActionFromActions(game, actions, observation)
 
     def getActionFromActions(self, game, actions, observation):
-        estimates = [self.forward(game.previousAttackerObservation, observation, game.previousDefenderAction, action) for action in actions]
+        estimates = [self.forward(game.previousAttackerObservation, observation, game.previousAttackerAction, action) for action in actions]
         index = np.argmax(estimates)
         action = actions[index]
         return action
@@ -76,12 +75,12 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
-    history = []
-    lossHistory = []
-    equilibriumHistory = []
-
-    gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
-    equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
+    if trainingTest:
+        history = []
+        lossHistory = []
+        equilibriumHistory = []
+        gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+        equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
