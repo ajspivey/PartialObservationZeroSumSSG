@@ -121,7 +121,6 @@ class SequentialZeroSumSSG(object):
         # Update utility scores
         defenderActionScore, attackerActionScore = self.getActionScore(dAction, aAction, self.defenderRewards, self.defenderPenalties)
         self.defenderUtility += defenderActionScore
-
         return (dOb, aOb, defenderActionScore, attackerActionScore)
 
     # --------------------------------------------------------------------------
@@ -252,12 +251,12 @@ def cloneGame(game):
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 def cloneGameState(game1, game2):
     game1.currentTimestep = game2.currentTimestep
-    game1.targets = game2.targets
+    game1.targets = game2.targets.copy()
     game1.availableResources = game2.availableResources
-    game1.pastAttacks = game2.pastAttacks
-    game1.pastAttackStatuses = game2.pastAttackStatuses
+    game1.pastAttacks = game2.pastAttacks.copy()
+    game1.pastAttackStatuses = game2.pastAttackStatuses.copy()
     game1.defenderUtility = game2.defenderUtility
-    game1.previousAttackerAction = game2.previousAttackerAction
-    game1.previousDefenderAction = game2.previousDefenderAction
-    game1.previousAttackerObservation = game2.previousAttackerObservation
-    game1.previousDefenderObservation = game2.previousDefenderObservation
+    game1.previousAttackerAction = game2.previousAttackerAction.copy()
+    game1.previousDefenderAction = game2.previousDefenderAction.copy()
+    game1.previousAttackerObservation = game2.previousAttackerObservation.copy()
+    game1.previousDefenderObservation = game2.previousDefenderObservation.copy()

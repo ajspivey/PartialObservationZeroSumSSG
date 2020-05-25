@@ -73,13 +73,12 @@ def main():
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     game.defenderRewards = [10, 10, 10, 10]
-    game.defenderPenalties =[1000000, 10, 30, 10]
+    game.defenderPenalties =[10000, 10, 30, 10]
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
     # coreLP
     dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
     aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-    print(dMix)
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
     dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=50, epochs=dEpochs)

@@ -27,6 +27,7 @@ def main():
     # ===============
     experimentIterations = 2
     seedingIterations = 3
+    warmUpIterations = 50
     targetNum = 4
     resources = 2
     timesteps = 2
@@ -41,6 +42,15 @@ def main():
     # ==========================================================================
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
+    # ==========================================================================
+    # WARM-UP ITERATIONS
+    # ==========================================================================
+    for _ in range(warmUpIterations):
+        dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+        aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+        newDOracle = BaselineDefender(targetNum)
+        newAOracle = BaselineAttacker(targetNum)
+        newDefenderId, newAttackerId, payoutMatrix = updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, dMap, aMap, game, newDOracle, newAOracle)
     # ==========================================================================
     # ALGORITHM ITERATIONS
     # ==========================================================================
@@ -94,7 +104,6 @@ def calculatePayoutMatrix(dIds, aIds, dMap, aMap, game):
     for attackerId in aIds:
         pureAttacker = aMap[attackerId]
         for defenderId in dIds:
-            print("Getting payout")
             pureDefender = dMap[defenderId]
             value = game.getPayout(pureDefender, pureAttacker).item()
             payoutMatrix[defenderId,attackerId] = value

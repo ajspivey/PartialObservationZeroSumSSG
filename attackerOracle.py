@@ -67,6 +67,25 @@ class AttackerOracle(nn.Module):
         state = self.state_dict()
         return state
 
+class BaselineAttacker():
+    def __init__(self, ):
+        pass
+
+    def forward(self, previousObservation, observation, previousAction, action):
+        pass
+
+    def getAction(self, game, observation):
+        return None
+
+    def getActionFromActions(self, game, actions, observation):
+        pass
+
+    def setState(self, state):
+        pass
+
+    def getState(self):
+        return None
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================

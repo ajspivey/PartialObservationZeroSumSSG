@@ -66,6 +66,28 @@ class DefenderOracle(nn.Module):
         state = self.state_dict()
         return state
 
+class DefenderParameterizedSoftmax():
+    def __init__(self, targetNum):
+        pass
+
+    def forward(self, previousObservation, observation, previousAction, action):
+        pass
+
+    def getAction(self, game, observation):
+        actions = game.getValidActions(ssg.DEFENDER)
+        return self.getActionFromActions(game, actions, observation)
+
+    def getActionFromActions(self, game, actions, observation):
+        index = np.argmax([self.forward(game.previousDefenderObservation, observation, game.previousDefenderAction, action) for action in actions])
+        action = actions[index]
+        return action
+
+    def setState(self, state):
+        pass
+
+    def getState(self):
+        return None
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
