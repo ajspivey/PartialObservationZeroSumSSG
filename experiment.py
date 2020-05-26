@@ -7,8 +7,8 @@ import csv
 # Internal
 import ssg
 from coreLP import getAttackerMixedStrategy, getDefenderMixedStrategy
-from attackerOracle import AttackerOracle, attackerTrain
-from defenderOracle import DefenderOracle, defenderTrain
+from attackerOracle import AttackerOracle, AttackerParameterizedSoftmax, attackerTrain
+from defenderOracle import DefenderOracle, DefenderParameterizedSoftmax, defenderTrain
 # +++++++
 
 np.random.seed(6)
@@ -26,8 +26,7 @@ def main():
     # HyperParameters
     # ===============
     experimentIterations = 2
-    seedingIterations = 3
-    warmUpIterations = 50
+    seedingIterations = 10
     targetNum = 4
     resources = 2
     timesteps = 2
@@ -45,12 +44,12 @@ def main():
     # ==========================================================================
     # WARM-UP ITERATIONS
     # ==========================================================================
-    for _ in range(warmUpIterations):
-        dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-        aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-        newDOracle = BaselineDefender(targetNum)
-        newAOracle = BaselineAttacker(targetNum)
-        newDefenderId, newAttackerId, payoutMatrix = updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, dMap, aMap, game, newDOracle, newAOracle)
+    # for _ in range(warmUpIterations):
+    #     dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    #     aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    #     newDOracle = BaselineDefender(targetNum)
+    #     newAOracle = BaselineAttacker(targetNum)
+    #     newDefenderId, newAttackerId, payoutMatrix = updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, dMap, aMap, game, newDOracle, newAOracle)
     # ==========================================================================
     # ALGORITHM ITERATIONS
     # ==========================================================================
@@ -89,8 +88,8 @@ def seedInitialPureStrategies(seedingIterations, targetNum):
     aMap = {}
     dMap = {}
     for _ in range(seedingIterations):
-        attackerOracle = AttackerOracle(targetNum)
-        defenderOracle = DefenderOracle(targetNum)
+        attackerOracle = AttackerParameterizedSoftmax(targetNum)
+        defenderOracle = DefenderParameterizedSoftmax(targetNum)
         aIds.append(newAttackerId)
         dIds.append(newDefenderId)
         aMap[newAttackerId] = attackerOracle

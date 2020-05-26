@@ -2,6 +2,7 @@
 # IMPORTS
 # ==============================================================================
 # External imports
+from math import exp
 import numpy as np
 import torch
 import torch.nn as nn
@@ -67,18 +68,36 @@ class AttackerOracle(nn.Module):
         state = self.state_dict()
         return state
 
-class BaselineAttacker():
-    def __init__(self, ):
-        pass
+class AttackerParameterizedSoftmax():
+    def __init__(self, targetNum):
+        # Initalize random weights for parameterized softmx --
+        # For the attacker, we are parameterizing rewards and penalties at
+        # remaining targets.
+        self.targetNum = targetNum
+        self.rewardsWeight = np.random.uniform(0,1)
+        self.penaltiesWeight = np.random.uniform(0,1)
+
+    def getActionDistribution(self, game, actions, observation):
+        actionValues = [self.forward(game.previousAttackerObservation, observation, game.previousAttackerAction, action) for action in actions]
+        estimateSum = sum(actionValues)
+        distribution = [actionValue/estimateSum for actionValue in actionValues]
+        return distribution
 
     def forward(self, previousObservation, observation, previousAction, action):
-        pass
+        rewards = observation[self.targetNum*3:self.targetNum*4]
+        penalties = observation[self.targetNum*4:]
+        # Combine the weights
+        weightedRewards = -sum(rewards * action * self.rewardsWeight)
+        weightedPenalties = sum(penalties * action * self.penaltiesWeight)
+        return exp(weightedRewards + weightedPenalties)
 
     def getAction(self, game, observation):
-        return None
+        actions = game.getValidActions(ssg.ATTACKER)
+        return self.getActionFromActions(game, actions, observation)
 
     def getActionFromActions(self, game, actions, observation):
-        pass
+        distribution = self.getActionDistribution(game, actions, observation)
+        return actions[np.random.choice(len(actions), 1, p=distribution)[0]]
 
     def setState(self, state):
         pass

@@ -2,6 +2,7 @@
 # IMPORTS
 # ==============================================================================
 # External imports
+from math import exp
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,10 +12,6 @@ import torch.optim as optim
 import ssg
 from actorCritic import getInputTensor, Transition, ReplayMemory, sampleMinibatch
 from baseline import getBaselineScore
-
-# Set the random seed
-torch.manual_seed(1)
-np.random.seed(1)
 
 # ==============================================================================
 # CLASSES
@@ -68,19 +65,34 @@ class DefenderOracle(nn.Module):
 
 class DefenderParameterizedSoftmax():
     def __init__(self, targetNum):
-        pass
+        # Initalize random weights for parameterized softmx --
+        # For the defender, we are parameterizing rewards and penalties at
+        # remaining targets.
+        self.targetNum = targetNum
+        self.rewardsWeight = np.random.uniform(0,1)
+        self.penaltiesWeight = np.random.uniform(0,1)
+
+    def getActionDistribution(self, game, actions, observation):
+        actionValues = [self.forward(game.previousDefenderObservation, observation, game.previousDefenderAction, action) for action in actions]
+        estimateSum = sum(actionValues)
+        distribution = [actionValue/estimateSum for actionValue in actionValues]
+        return distribution
 
     def forward(self, previousObservation, observation, previousAction, action):
-        pass
+        rewards = observation[self.targetNum*3:self.targetNum*4]
+        penalties = observation[self.targetNum*4:]
+        # Combine the weights
+        weightedRewards = sum(rewards * action * self.rewardsWeight)
+        weightedPenalties = -sum(penalties * [1-x for x in action] * self.penaltiesWeight)
+        return exp(weightedRewards + weightedPenalties)
 
     def getAction(self, game, observation):
         actions = game.getValidActions(ssg.DEFENDER)
         return self.getActionFromActions(game, actions, observation)
 
     def getActionFromActions(self, game, actions, observation):
-        index = np.argmax([self.forward(game.previousDefenderObservation, observation, game.previousDefenderAction, action) for action in actions])
-        action = actions[index]
-        return action
+        distribution = self.getActionDistribution(game, actions, observation)
+        return actions[np.random.choice(len(actions), 1, p=distribution)[0]]
 
     def setState(self, state):
         pass
