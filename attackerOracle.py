@@ -68,6 +68,9 @@ class AttackerOracle(nn.Module):
         state = self.state_dict()
         return state
 
+    def isSoftmax(self):
+        return False
+
 class AttackerParameterizedSoftmax():
     def __init__(self, targetNum):
         # Initalize random weights for parameterized softmx --
@@ -105,6 +108,9 @@ class AttackerParameterizedSoftmax():
     def getState(self):
         return None
 
+    def isSoftmax(self):
+        return True
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
@@ -117,7 +123,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
         history = []
         lossHistory = []
         equilibriumHistory = []
-        gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+        gameClone = ssg.cloneGame(game)
         equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
@@ -152,7 +158,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
             avgLoss = sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=batchSize)
 
             if trainingTest:
-                oracleScore = game.getOracleScore(ssg.ATTACKER, dIds, dMap, dMix, oracleToTrain)
+                oracleScore = ssg.expectedPureVMix(ssg.ATTACKER, oracleToTrain, dMap, dMix, gameClone)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
                 equilibriumHistory.append(equilibriumScore)
@@ -165,4 +171,4 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
         game.restartGame()
     if trainingTest:
         return history, lossHistory, equilibriumHistory
-    return game.getOracleScore(ssg.ATTACKER, dIds, dMap, dMix, oracleToTrain)
+    return ssg.expectedPureVMix(ssg.ATTACKER, oracleToTrain, dMap, dMix, gameClone)

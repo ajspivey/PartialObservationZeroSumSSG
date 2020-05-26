@@ -73,7 +73,7 @@ def main():
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     game.defenderRewards = [10, 10, 10, 10]
-    game.defenderPenalties =[10000, 10, 30, 10]
+    game.defenderPenalties =[100, 10, 30, 10]
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
     # coreLP

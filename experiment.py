@@ -104,19 +104,19 @@ def calculatePayoutMatrix(dIds, aIds, dMap, aMap, game):
         pureAttacker = aMap[attackerId]
         for defenderId in dIds:
             pureDefender = dMap[defenderId]
-            value = game.getPayout(pureDefender, pureAttacker).item()
+            value = ssg.expectedPureVPure(pureDefender, pureAttacker, ssg.cloneGame(game))
             payoutMatrix[defenderId,attackerId] = value
             game.restartGame()
     return payoutMatrix
 
 def updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, dMap, aMap, game, newDOracle, newAOracle):
     for aId in aIds:
-        value = game.getPayout(newDOracle, aMap[aId])
+        value = ssg.expectedPureVPure(newDOracle, aMap[aId], ssg.cloneGame(game))
         payoutMatrix[newDefenderId, aId] = value
     for dId in dIds:
-        value = game.getPayout(dMap[dId], newAOracle)
+        value = ssg.expectedPureVPure(dMap[dId], newAOracle, ssg.cloneGame(game))
         payoutMatrix[dId, newAttackerId] = value
-    value = game.getPayout(newDOracle, newAOracle)
+    value = ssg.expectedPureVPure(newDOracle, newAOracle, ssg.cloneGame(game))
     payoutMatrix[newDefenderId, newAttackerId] = value
     aIds.append(newAttackerId)
     dIds.append(newDefenderId)

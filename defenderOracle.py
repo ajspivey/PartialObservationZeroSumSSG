@@ -63,6 +63,9 @@ class DefenderOracle(nn.Module):
         state = self.state_dict()
         return state
 
+    def isSoftmax(self):
+        return False
+
 class DefenderParameterizedSoftmax():
     def __init__(self, targetNum):
         # Initalize random weights for parameterized softmx --
@@ -100,6 +103,9 @@ class DefenderParameterizedSoftmax():
     def getState(self):
         return None
 
+    def isSoftmax(self):
+        return True
+
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
@@ -109,12 +115,11 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
-
     if trainingTest:
         history = []
         lossHistory = []
         equilibriumHistory = []
-        gameClone = ssg.SequentialZeroSumSSG(game.numTargets, game.numResources, game.defenderRewards, game.defenderPenalties, game.timesteps)
+        gameClone = ssg.cloneGame(game)
         equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
@@ -149,7 +154,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
             avgLoss = sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=batchSize)
 
             if trainingTest:
-                oracleScore = gameClone.getOracleScore(ssg.DEFENDER, aIds, aMap, aMix, oracleToTrain)
+                oracleScore = ssg.expectedPureVMix(ssg.DEFENDER, oracleToTrain, aMap, aMix, gameClone)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
                 equilibriumHistory.append(equilibriumScore)
@@ -162,4 +167,4 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
         game.restartGame()
     if trainingTest:
         return history, lossHistory, equilibriumHistory
-    return game.getOracleScore(ssg.DEFENDER, aIds, aMap, aMix, oracleToTrain)
+    return ssg.expectedPureVMix(ssg.DEFENDER, oracleToTrain, aMap, aMix, gameClone)

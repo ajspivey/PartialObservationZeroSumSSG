@@ -164,38 +164,6 @@ class SequentialZeroSumSSG(object):
         return defenderPayout
 
     # --------------------------------------------------------------------------
-    def getOracleScore(self, player, ids, map, mix, oracle):
-        """
-        Returns the expected utility of an oracle vs. a mixed strategy
-        """
-        totalExpectedUtility = 0
-
-        if player == DEFENDER:
-            dAgent = oracle
-        else:
-            aAgent = oracle
-
-        # Get the utility against each pure strategy used in the mixed strategy
-        for i in range(len(mix)):
-            if mix[i] > 0:
-                if player == DEFENDER:
-                    aAgent = map[i]
-                else:
-                    dAgent = map[i]
-                dOb, aOb = self.getEmptyObservations()
-
-                # Play a full game
-                for timestep in range(self.timesteps):
-                    aAction = aAgent.getAction(self, aOb)
-                    dAction = dAgent.getAction(self, dOb)
-                    dOb, aOb, _, _ = self.performActions(dAction, aAction, dOb, aOb)
-                expectedUtility = self.defenderUtility * player * mix[i]
-                totalExpectedUtility += expectedUtility
-                self.restartGame()
-
-        return totalExpectedUtility
-
-    # --------------------------------------------------------------------------
     def getBestOracle(self, player, ids, map, mix, oracleList):
         """
         Returns the oracle in the list with the highest utility against the mixed
@@ -206,7 +174,7 @@ class SequentialZeroSumSSG(object):
 
         # Calculate average utility for each oracle in the list
         for oracle in oracleList:
-            avgUtility = self.getOracleScore(player, ids, map, mix, oracle)
+            avgUtility = expectedPureVMix(player, oracle, map, mix, cloneGame(self))
             if (bestUtility is None or avgUtility > bestUtility):
                 bestUtility = avgUtility
                 bestOracle = oracle
@@ -260,3 +228,38 @@ def cloneGameState(game1, game2):
     game1.previousDefenderAction = game2.previousDefenderAction.copy()
     game1.previousAttackerObservation = game2.previousAttackerObservation.copy()
     game1.previousDefenderObservation = game2.previousDefenderObservation.copy()
+
+#
+def expectedPureVPure(dAgent, aAgent, gameClone, avgCount=50):
+    expectedValue = playGame(gameClone, dAgent, aAgent)
+    gameClone.restartGame()
+
+    if (dAgent.isSoftmax() or aAgent.isSoftmax()):
+        for _ in range(avgCount - 1):
+            expectedValue += playGame(gameClone, dAgent, aAgent)
+            gameClone.restartGame()
+        expectedValue /= avgCount
+    return expectedValue
+
+def playGame(gameClone, dPure, aPure):
+    dOb, aOb = gameClone.getEmptyObservations()
+    # Play a full game
+    for timestep in range(gameClone.timesteps):
+        dAction = dPure.getAction(gameClone, dOb)
+        aAction = aPure.getAction(gameClone, aOb)
+        dOb, aOb, _, _ = gameClone.performActions(dAction, aAction, dOb, aOb)
+    return gameClone.defenderUtility
+
+def expectedPureVMix(player, pure, map, mix, gameClone):
+    expectedValue = 0
+    # For each agent in the mix, play a pureVpure game and multiply by the odds
+    for agentIndex in range(len(map)):
+        mixAgent = map[agentIndex]
+        if player == DEFENDER:
+            dAgent = pure
+            aAgent = mixAgent
+        else:
+            dAgent = mixAgent
+            aAgent = pure
+        expectedValue += expectedPureVPure(dAgent, aAgent, gameClone) * mix[agentIndex]
+    return expectedValue * player
