@@ -169,15 +169,16 @@ class SequentialZeroSumSSG(object):
         Returns the oracle in the list with the highest utility against the mixed
         strategy specified, and its utility
         """
-        bestUtility = None
-        bestOracle = None
+        bestOracle = oracleList[0]
+        bestUtility = expectedPureVMix(player, bestOracle, map, mix, cloneGame(self))
 
         # Calculate average utility for each oracle in the list
         for oracle in oracleList:
-            avgUtility = expectedPureVMix(player, oracle, map, mix, cloneGame(self))
-            if (bestUtility is None or avgUtility > bestUtility):
-                bestUtility = avgUtility
-                bestOracle = oracle
+            if not oracle.isSoftmax():
+                avgUtility = expectedPureVMix(player, oracle, map, mix, cloneGame(self))
+                if (bestUtility is None or avgUtility > bestUtility):
+                    bestUtility = avgUtility
+                    bestOracle = oracle
         return (bestOracle, bestUtility)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
