@@ -114,12 +114,12 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    gameClone = ssg.cloneGame(game)
 
     if trainingTest:
         history = []
         lossHistory = []
         equilibriumHistory = []
-        gameClone = ssg.cloneGame(game)
         equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
