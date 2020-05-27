@@ -114,7 +114,7 @@ class AttackerParameterizedSoftmax():
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=50, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
+def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)

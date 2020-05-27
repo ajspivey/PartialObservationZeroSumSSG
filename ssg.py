@@ -230,7 +230,7 @@ def cloneGameState(game1, game2):
     game1.previousDefenderObservation = game2.previousDefenderObservation.copy()
 
 #
-def expectedPureVPure(dAgent, aAgent, gameClone, avgCount=50):
+def expectedPureVPure(dAgent, aAgent, gameClone, avgCount=10):
     expectedValue = playGame(gameClone, dAgent, aAgent)
     gameClone.restartGame()
 

@@ -62,25 +62,26 @@ def main():
     # ---------------
     # HyperParameters
     # ---------------
-    seedingIterations = 10
+    seedingIterations = 20
     targetNum = 4
     resources = 2
     timesteps = 2
     timesteps2 = 2
-    dEpochs = 3
-    aEpochs = 3
+    dEpochs = 100
+    aEpochs = 100
     # ---------------
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
-    game.defenderRewards = [10, 10, 10, 10]
-    game.defenderPenalties =[100, 10, 30, 10]
+    print("Seeding Initial Strategies and Calculating Payout Matrix...")
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
     # coreLP
+    print("Generating Mixed Strategies...")
     dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
     aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
+    print("Generating Training Graphs...")
     dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=50, epochs=dEpochs)
     aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
     # Get graphs for when the game only has 2 steps
@@ -93,6 +94,7 @@ def main():
     # dHistory2, dLossHistory2, dBaselineHistory2 = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
     # aHistory2, aLossHistory2, aBaselineHistory2 = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
     # Build the graphs
+    print("Building and displaying Graphs...")
     graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory)]
     # , (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
     # Show the graphs

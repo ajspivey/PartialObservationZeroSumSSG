@@ -25,11 +25,11 @@ def main():
     # ===============
     # HyperParameters
     # ===============
-    experimentIterations = 2
-    seedingIterations = 10
-    targetNum = 4
+    experimentIterations = 30
+    seedingIterations = 20
+    targetNum = 6
     resources = 2
-    timesteps = 2
+    timesteps = 3
     # +++++++++++++++
     # ===========
     # CSV WRITERS
