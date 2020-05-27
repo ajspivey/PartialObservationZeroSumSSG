@@ -113,13 +113,16 @@ def getAttackerBaseline(dIds, dMap, dMix, game, aPool):
             ssg.cloneGameState(undoClone, game)
     return expectedUtility
 
-def getBestResponseAction(player, game, map, mix, pool, pOb, eOb):
+def getBestResponseAction(player, game, map, mix, pool, pOb, eOb, avgCount=50):
     pActions = [playerAgent.getAction(game, pOb) for playerAgent in pool]
-    eActions = [eAgent.getAction(game, eOb) for eAgent in map.values()]
     actionScores = []
     for pAction in pActions:
         actionScore = 0
-        for i in range(len(eActions)):
-            actionScore += game.getActionScore(pAction, eActions[i], game.defenderRewards, game.defenderPenalties)[player] * mix[i]
+        for eAgent in map.values():
+            actionScore += game.getActionScore(pAction, eAgent.getAction(game, eOb), game.defenderRewards, game.defenderPenalties)[player] * mix[i]
+            if eAgent.isSoftmax():
+                for _ in range(avgCount - 1):
+                    actionScore += game.getActionScore(pAction, eAgent.getAction(game, eOb), game.defenderRewards, game.defenderPenalties)[player] * mix[i]
+                actionScore /= avgCount
         actionScores.append(actionScore)
     return pActions[np.argmax(actionScores)]
