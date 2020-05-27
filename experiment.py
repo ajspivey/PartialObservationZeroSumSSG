@@ -31,14 +31,27 @@ def main():
     resources = 2
     timesteps = 2
     # +++++++++++++++
+    # ===========
+    # CSV WRITERS
+    # ===========
+    csvFileThing = open("outputFiles/payoutMatrix.csv", "w", newline='')
+    csvWriterThing = csv.writer(csvFileThing, delimiter=',')
+    csvFile = open("outputFiles/utilities.csv", "w", newline='')
+    csvWriter = csv.writer(csvFile, delimiter=',')
+    csvWriter.writerow(["Defender Mixed Utility", "Expected Utility of Defender Oracle vs Attacker Mixed", "Expected Utility of Best Defender Pure Strategy", "Defender Mixed Strategy", "Attacker Mixed Utility", "Expected Utility of Attacker Oracle vs Defender Mixed", "Expected Utility of Best Attacker Pure Strategy", "Attacker Mixed Strategy"])
+    # +++++++++++
 
     # ==========================================================================
     # CREATE GAME
     # ==========================================================================
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
+    csvWriterThing.writerow(["Rewards",f"{defenderRewards}"])
+    csvWriterThing.writerow(["Penalties",f"{defenderPenalties}"])
+    csvWriterThing.writerow(["defenderID","attackerID","Value(Defender payoff)"])
     # ==========================================================================
     # GENERATE INITIAL PURE STRATEGIES
     # ==========================================================================
+    print("Seeding Initial Strategies and Calculating Payout Matrix...")
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
     # ==========================================================================
@@ -57,12 +70,15 @@ def main():
         # ----------------------------------------------------------------------
         # CORELP
         # ----------------------------------------------------------------------
+        print(f"Iteration {_} of {experimentIterations}")
+        print("Generating Mixed Strategies...")
         dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
         aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
         # ----------------------------------------------------------------------
         # ORACLES
         # ----------------------------------------------------------------------
         # Defender
+        print("Training Oracles...")
         bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, aIds, aMap, aMix, dMap.values())
         parameters = bestDOracle.getState()
         newDOracle = DefenderOracle(targetNum)
@@ -77,8 +93,21 @@ def main():
         # ----------------------------------------------------------------------
         # UPDATE POOLS
         # ----------------------------------------------------------------------
+        print("Updating Payout Matrix...")
         newDefenderId, newAttackerId, payoutMatrix = updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, dMap, aMap, game, newDOracle, newAOracle)
+        csvWriter.writerow([f"{dMixUtility}",f"{newDOracleScore}",f"{bestDOracleUtility}", f"{dMix}", f"{aMixUtility}", f"{newAOracleScore}",f"{bestAOracleUtility}", f"{aMix}"])
+
+    # Cleanup
+    for key in payoutMatrix.keys():
+        defenderID, attackerID = key
+        csvWriterThing.writerow([defenderID, attackerID, payoutMatrix[key]])
+    csvFileThing.close()
+    csvFile.close()
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
 
 def seedInitialPureStrategies(seedingIterations, targetNum):
     newDefenderId = 0
@@ -129,23 +158,3 @@ def updatePayoutMatrix(newDefenderId, newAttackerId, payoutMatrix, dIds, aIds, d
 
 if __name__ == "__main__":
     main()
-
-
-
-# csvFileThing = open("outputFiles/payoutMatrix.csv", "w", newline='')
-# csvWriterThing = csv.writer(csvFileThing, delimiter=',')
-# csvWriterThing.writerow(["Rewards",f"{defenderRewards}"])
-# csvWriterThing.writerow(["Penalties",f"{defenderPenalties}"])
-# csvWriterThing.writerow(["defenderID","attackerID","Value(Defender payoff)"])
-# for key in payoutMatrix.keys():
-#     defenderID, attackerID = key
-#     csvWriterThing.writerow([defenderID, attackerID, payoutMatrix[key]])
-# csvFileThing.close()
-# if writeUtilityFile:
-#     csvFile = open("outputFiles/utilities.csv", "w", newline='')
-#     csvWriter = csv.writer(csvFile, delimiter=',')
-#     csvWriter.writerow(["Defender Mixed Utility", "Expected Utility of Defender Oracle vs Attacker Mixed", "Expected Utility of Best Defender Pure Strategy", "Defender Mixed Strategy", "Attacker Mixed Utility", "Expected Utility of Attacker Oracle vs Defender Mixed", "Expected Utility of Best Attacker Pure Strategy", "Attacker Mixed Strategy"])
-# if writeUtilityFile:
-#     csvWriter.writerow([f"{dUtility}",f"{newDOracleScore}",f"{bestDOracleUtility}", f"{dMix}", f"{aUtility}", f"{newAOracleScore}",f"{bestAOracleUtility}", f"{aMix}"])
-# if writeUtilityFile:
-#     csvFile.close()
