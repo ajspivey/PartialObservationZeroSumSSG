@@ -29,41 +29,42 @@ class AttackerOracle(nn.Module):
         self.input_size = self.observation_dim + targetNum
 
         # LSTM
-        # self.LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
-        # self.linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
-        # self.outputLinearLayer = nn.Linear(2*self.featureCount, 1)
-        # self.ReLU = nn.ReLU()
+        self.lstm_LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
+        self.lstm_linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
+        self.lstm_outputLinearLayer = nn.Linear(2*self.featureCount, 1)
+        self.lstm_ReLU = nn.ReLU()
 
         # LINEAR
-        self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
-        self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
-        self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
-        self.outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
-        self.PReLU = nn.PReLU()
+        self.lin_inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
+        self.lin_linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
+        self.lin_linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
+        self.lin_outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
+        self.lin_PReLU = nn.PReLU()
 
     # Define a forward pass of the network
-    def forward(self, oldObservation, observation, oldAction, action):
+    def forward(self, oldObservation, observation, oldAction, action, type="LSTM"):
         # LSTM
-        # inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
-        # LSTMOutput, hiddenStates = self.LSTM(inputTensor)
-        # LSTMOutput = LSTMOutput[1]
-        # LSTMReLU = self.ReLU(LSTMOutput)
-        # CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
-        # linear = self.linearLayer(CReLU)
-        # linearReLU = self.ReLU(linear)
-        # CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
-        # output = self.outputLinearLayer(CReLU2)
-        # return output[0]
+        if type == "LSTM":
+            inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
+            LSTMOutput, hiddenStates = self.lstm_LSTM(inputTensor)
+            LSTMOutput = LSTMOutput[1]
+            LSTMReLU = self.lstm_ReLU(LSTMOutput)
+            CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
+            linear = self.lstm_linearLayer(CReLU)
+            linearReLU = self.lstm_ReLU(linear)
+            CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
+            output = self.lstm_outputLinearLayer(CReLU2)
+            return output[0]
 
         # LINEAR
         actionTensor = torch.tensor(action).float().requires_grad_(True)
         observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
         inputTensor = torch.cat((observationTensor, actionTensor),0)
         inputTensor = inputTensor.view(1, -1)
-        input = self.PReLU(self.inputLayer(inputTensor))
-        linear1 = self.PReLU(self.linearLayer1(input))
-        linear2 = self.PReLU(self.linearLayer2(linear1))
-        output = self.outputLinearLayer(linear2)
+        input = self.lin_PReLU(self.lin_inputLayer(inputTensor))
+        linear1 = self.lin_PReLU(self.lin_linearLayer1(input))
+        linear2 = self.lin_PReLU(self.lin_linearLayer2(linear1))
+        output = self.lin_outputLinearLayer(linear2)
         return output[0]
 
 
@@ -131,7 +132,7 @@ class AttackerParameterizedSoftmax():
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
+def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False, writer=None):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters())
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
@@ -160,6 +161,9 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
             # Choose an action based off of Q network (oracle to train)
             dAction = defenderAgent.getAction(game, dOb)
             aAction = oracleToTrain.getAction(game, aOb)
+
+            if trainingTest:
+                writer.writerow([f"{(timestep+1)+(game.timesteps*(epoch))}", f"{game.getValidActions(ssg.ATTACKER)}", f"{[oracleToTrain.forward(game.previousAttackerObservation, aOb, game.previousAttackerAction, x).item() for x in game.getValidActions(ssg.ATTACKER)]}", f"{aAction}"])
 
             # Execute that action and store the result in replay memory
             ob0 = game.previousAttackerObservation

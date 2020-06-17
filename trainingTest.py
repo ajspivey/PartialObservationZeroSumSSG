@@ -4,6 +4,7 @@
 # External
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 import time
 # Internal
 import ssg
@@ -15,19 +16,31 @@ from experiment import calculatePayoutMatrix, seedInitialPureStrategies
 # =========
 # FUNCTIONS
 # =========
-def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50):
+def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50, writer=None):
     if player == ssg.DEFENDER:
         bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, ids, map, mix, pool)
         parameters = bestDOracle.getState()
         newDOracle = DefenderOracle(game.numTargets)
         newDOracle.setState(parameters)
-        return defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True)
+        lstm, lstmLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        writer.writerow([])
+        writer.writerow(["Linear"])
+        newDOracle.setState(parameters)
+        newDOracle.type = "Linear"
+        linear, linearLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        return lstm, lstmLoss, linear, linearLoss
     else:
         bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, ids, map, mix, pool)
         parameters = bestAOracle.getState()
         newAOracle = AttackerOracle(game.numTargets)
         newAOracle.setState(parameters)
-        return attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True)
+        lstm, lstmLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        writer.writerow([])
+        writer.writerow(["Linear"])
+        newAOracle.setState(parameters)
+        newAOracle.type = "Linear"
+        linear, linearLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        return lstm, lstmLoss, linear, linearLoss
 
 def showGraphs(graphs):
     i = 1
@@ -78,12 +91,20 @@ def main():
     exportMixedStrategies = False
     # ---------------
     # HyperParameters
-    dEpochs = 300
-    aEpochs = 0
+    dEpochs = 200
+    aEpochs = 200
     seedingIterations = 20
     targetNum = 4
     resources = 2
     timesteps = 3
+    # ---------------
+    # CSV stuffs
+    csvFileAttacker = open("outputFiles/attackerTraining.csv", "w", newline='')
+    csvWriterAttacker = csv.writer(csvFileAttacker, delimiter=',')
+    csvWriterAttacker.writerow(["iteration", "action list", "network estimate list", "action chosen"])
+    csvFileDefender = open("outputFiles/defenderTraining.csv", "w", newline='')
+    csvWriterDefender = csv.writer(csvFileDefender, delimiter=',')
+    csvWriterDefender.writerow(["iteration", "action list", "network estimate list", "action chosen"])
     # ---------------
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
@@ -100,15 +121,16 @@ def main():
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
     print("Generating Training Graphs...")
-    dHistory, dLossHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs)
-    aHistory, aLossHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
+    dHistoryLSTM, dLossHistoryLSTM, dHistoryLinear, dLossHistoryLinear = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs, writer=csvWriterDefender)
+    aHistoryLSTM, aLossHistoryLSTM, aHistoryLinear, aLossHistoryLinear = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs, writer=csvWriterAttacker)
     times.append(time.time())
     # Build the graphs
     print("Building and displaying Graphs...")
-    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory)]
-    # , (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
+    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistoryLSTM, dLossHistoryLSTM), (ssg.DEFENDER, dEpochs*timesteps, dHistoryLinear, dLossHistoryLinear), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLSTM, aLossHistoryLSTM), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLinear, aLossHistoryLinear)]
     # Show the graphs
     times.append(time.time())
+    csvFileDefender.close()
+    csvFileAttacker.close()
     displayTimes(times)
     showGraphs(graphs)
 
