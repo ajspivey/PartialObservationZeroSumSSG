@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import time
 
 # Internal Imports
 import ssg
@@ -24,26 +25,29 @@ class DefenderOracle(nn.Module):
         self.observation_dim = targetNum * self.featureCount
         self.input_size = self.observation_dim + targetNum
 
-        self.linearLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
-        self.ReLU = nn.ReLU()
-        self.LSTM = nn.LSTM(2*self.input_size*self.featureCount, self.input_size*self.featureCount)
-        self.outputLinearLayer = nn.Linear(2*self.input_size*self.featureCount, 1)
+        # Increase to three hidden layers
+        self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
+        self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
+        self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
+        self.outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
+        self.PReLU = nn.PReLU()
 
     # Define a forward pass of the network
     def forward(self, previousObservation, observation, previousAction, action):
-        inputTensor = getInputTensor(previousObservation, observation, previousAction, action)
-        # Linear Layer
-        linearOut = self.linearLayer(inputTensor)
-        # CReLU
-        ReLUOld, ReLUNew = self.ReLU(linearOut)
-        CReLUOld = torch.cat((ReLUOld, -ReLUOld),0)
-        CReLUNew = torch.cat((ReLUNew, -ReLUNew),0)
-        CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.input_size*self.featureCount).unsqueeze(1)
-        # LSTM
-        LSTMOut, _ = self.LSTM(CReLU)
-        LSTMOut = torch.flatten(LSTMOut)
-        # Output
-        output = self.outputLinearLayer(LSTMOut)
+        actionTensor = torch.tensor(action).float().requires_grad_(True)
+        observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
+        inputTensor = torch.cat((observationTensor, actionTensor),0)
+        # print(inputTensor)
+        inputTensor = inputTensor.view(1, -1)
+        # print(inputTensor)
+        # print(inputTensor.size())
+        # print(self.input_size)
+        # print("\n\n\n\n\n")
+
+        input = self.PReLU(self.inputLayer(inputTensor))
+        linear1 = self.PReLU(self.linearLayer1(input))
+        linear2 = self.PReLU(self.linearLayer2(linear1))
+        output = self.outputLinearLayer(linear2)
         return output[0]
 
     def getAction(self, game, observation):
@@ -110,9 +114,9 @@ class DefenderParameterizedSoftmax():
 # FUNCTIONS
 # ==============================================================================
 # ------------------------------------------------------------------------------
-def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize=15, C=100, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
+def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize=30, C=30, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
     gameClone = ssg.cloneGame(game)
 
@@ -120,7 +124,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=100, batchSize
         history = []
         lossHistory = []
         equilibriumHistory = []
-        equilibriumScore = getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
+        equilibriumScore = 0#getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
