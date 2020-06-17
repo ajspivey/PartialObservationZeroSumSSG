@@ -32,15 +32,14 @@ def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50)
 def showGraphs(graphs):
     i = 1
     for graph in graphs:
-        player, graphSize, history, lossHistory, baselineHistory = graph
+        player, graphSize, history, lossHistory = graph
         playerName = "Defender"
         if player == ssg.ATTACKER:
             playerName = "Attacker"
         # Plot the stuff
         baselineGraph = plt.figure(i)
         plt.plot(range(graphSize), history, 'g', label=f'{playerName} Oracle Utility')
-        plt.plot(range(graphSize), baselineHistory, 'r', label='Myopic Baseline Utility')
-        plt.title(f'{playerName} Oracle Utility vs. Myopic Baseline')
+        plt.title(f'{playerName} Oracle Utility')
         plt.xlabel('Minibatches Trained')
         plt.ylabel('Utility')
         plt.legend()
@@ -101,12 +100,12 @@ def main():
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
     print("Generating Training Graphs...")
-    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs)
-    aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
+    dHistory, dLossHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs)
+    aHistory, aLossHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
     times.append(time.time())
     # Build the graphs
     print("Building and displaying Graphs...")
-    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory)]
+    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory)]
     # , (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
     # Show the graphs
     times.append(time.time())

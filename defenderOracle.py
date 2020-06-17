@@ -51,7 +51,7 @@ class DefenderOracle(nn.Module):
         CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
         output = self.outputLinearLayer(CReLU2)
         return output[0]
-        
+
         # LINEAR
         # actionTensor = torch.tensor(action).float().requires_grad_(True)
         # observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
@@ -136,8 +136,8 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize
     if trainingTest:
         history = []
         lossHistory = []
-        equilibriumHistory = []
-        equilibriumScore = 0#getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
+        # equilibriumHistory = []
+        # equilibriumScore = 0#getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
