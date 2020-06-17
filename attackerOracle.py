@@ -28,27 +28,38 @@ class AttackerOracle(nn.Module):
         self.observation_dim = targetNum * self.featureCount
         self.input_size = self.observation_dim + targetNum
 
-        self.linearLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
-        self.ReLU = nn.ReLU()
-        self.LSTM = nn.LSTM(2*self.input_size*self.featureCount, self.input_size*self.featureCount)
-        self.outputLinearLayer = nn.Linear(2*self.input_size*self.featureCount, 1)
+        # self.LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
+        # self.linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
+        # self.outputLinearLayer = nn.Linear(2*self.featureCount, 1)
+        # self.ReLU = nn.ReLU()
+        self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
+        self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
+        self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
+        self.outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
+        self.PReLU = nn.PReLU()
 
     # Define a forward pass of the network
     def forward(self, oldObservation, observation, oldAction, action):
-        inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
-        # Linear Layer
-        linearOut = self.linearLayer(inputTensor)
-        # CReLU
-        ReLUOld, ReLUNew = self.ReLU(linearOut)
-        CReLUOld = torch.cat((ReLUOld, -ReLUOld),0)
-        CReLUNew = torch.cat((ReLUNew, -ReLUNew),0)
-        CReLU = torch.cat((CReLUOld,-CReLUNew),0).view(2,2*self.input_size*self.featureCount).unsqueeze(1)
-        # LSTM
-        LSTMOut, _ = self.LSTM(CReLU)
-        LSTMOut = torch.flatten(LSTMOut)
-        # Output
-        output = self.outputLinearLayer(LSTMOut)
+        # inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
+        # LSTMOutput, hiddenStates = self.LSTM(inputTensor)
+        # LSTMOutput = LSTMOutput[1]
+        # LSTMReLU = self.ReLU(LSTMOutput)
+        # CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
+        # linear = self.linearLayer(CReLU)
+        # linearReLU = self.ReLU(linear)
+        # CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
+        # output = self.outputLinearLayer(CReLU2)
+        # return output[0]
+        actionTensor = torch.tensor(action).float().requires_grad_(True)
+        observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
+        inputTensor = torch.cat((observationTensor, actionTensor),0)
+        inputTensor = inputTensor.view(1, -1)
+        input = self.PReLU(self.inputLayer(inputTensor))
+        linear1 = self.PReLU(self.linearLayer1(input))
+        linear2 = self.PReLU(self.linearLayer2(linear1))
+        output = self.outputLinearLayer(linear2)
         return output[0]
+
 
     def getAction(self, game, observation):
         actions = game.getValidActions(ssg.ATTACKER)
@@ -124,7 +135,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
         history = []
         lossHistory = []
         equilibriumHistory = []
-        equilibriumScore = getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
+        equilibriumScore = 0 #getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
