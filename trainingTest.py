@@ -4,6 +4,7 @@
 # External
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 # Internal
 import ssg
 from coreLP import getAttackerMixedStrategy, getDefenderMixedStrategy
@@ -11,6 +12,9 @@ from attackerOracle import AttackerOracle, attackerTrain
 from defenderOracle import DefenderOracle, defenderTrain
 from experiment import calculatePayoutMatrix, seedInitialPureStrategies
 
+# =========
+# FUNCTIONS
+# =========
 def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50):
     if player == ssg.DEFENDER:
         bestDOracle, bestDOracleUtility = game.getBestOracle(ssg.DEFENDER, ids, map, mix, pool)
@@ -50,54 +54,63 @@ def showGraphs(graphs):
         i += 2
     plt.show()
 
+def displayTimes(times):
+    START = 0
+    PURE = 1
+    PAYOUT = 2
+    MIX = 3
+    TRAINING = 4
+    END = 5
+    print(f"")
+    print(f"Pure strategy generation time: {times[PURE] - times[START]}")
+    print(f"Payout matrix generation time: {times[PAYOUT] - times[PURE]}")
+    print(f"Mixed strategy generation time: {times[MIX] - times[PAYOUT]}")
+    print(f"Training and baseline time: {times[TRAINING] - times[MIX]}")
+    print(f"Total execution time: {times[END]-times[START]}")
+
 # ====
 # MAIN
 # ====
 def main():
+    times = []
+    times.append(time.time())
     # =========
     # DEBUGGING
-    # =========
-    export = False
-    # +++++++++
+    exportMixedStrategies = False
     # ---------------
     # HyperParameters
-    # ---------------
+    dEpochs = 300
+    aEpochs = 0
     seedingIterations = 20
     targetNum = 4
     resources = 2
-    timesteps = 2
-    timesteps2 = 2
-    dEpochs = 100
-    aEpochs = 100
+    timesteps = 3
     # ---------------
     # CREATE GAME
     game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     print("Seeding Initial Strategies and Calculating Payout Matrix...")
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
+    times.append(time.time())
     payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
+    times.append(time.time())
     # coreLP
     print("Generating Mixed Strategies...")
-    dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-    aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
+    dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, exportMixedStrategies)
+    aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, exportMixedStrategies)
+    times.append(time.time())
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
     print("Generating Training Graphs...")
-    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=50, epochs=dEpochs)
+    dHistory, dLossHistory, dBaselineHistory = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs)
     aHistory, aLossHistory, aBaselineHistory = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs)
-    # Get graphs for when the game only has 2 steps
-    # game.timesteps = timesteps2
-    # newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
-    # payoutMatrix = calculatePayoutMatrix(dIds, aIds, dMap, aMap, game)
-    # # coreLP
-    # dMix, dMixUtility = getDefenderMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-    # aMix, aMixUtility = getAttackerMixedStrategy(dIds, dMap, aIds, aMap, payoutMatrix, export)
-    # dHistory2, dLossHistory2, dBaselineHistory2 = getTrainingGraph(ssg.DEFENDER, game, attackerPureIds, attackerIdMap, attackerMixedStrategy, defenderIdMap.values(), epochs=dEpochs)
-    # aHistory2, aLossHistory2, aBaselineHistory2 = getTrainingGraph(ssg.ATTACKER, game, defenderPureIds, defenderIdMap, defenderMixedStrategy, attackerIdMap.values(), epochs=aEpochs)
+    times.append(time.time())
     # Build the graphs
     print("Building and displaying Graphs...")
     graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistory, dLossHistory, dBaselineHistory), (ssg.ATTACKER, aEpochs*timesteps, aHistory, aLossHistory, aBaselineHistory)]
     # , (ssg.DEFENDER, dEpochs*timesteps2, dHistory2, dLossHistory2, dBaselineHistory2), (ssg.ATTACKER, aEpochs*timesteps2, aHistory2, aLossHistory2, aBaselineHistory2)]
     # Show the graphs
+    times.append(time.time())
+    displayTimes(times)
     showGraphs(graphs)
 
 if __name__ == "__main__":
