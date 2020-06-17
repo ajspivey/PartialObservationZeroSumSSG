@@ -25,30 +25,43 @@ class DefenderOracle(nn.Module):
         self.observation_dim = targetNum * self.featureCount
         self.input_size = self.observation_dim + targetNum
 
-        # Increase to three hidden layers
-        self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
-        self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
-        self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
-        self.outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
-        self.PReLU = nn.PReLU()
+        # LSTM
+        self.LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
+        self.linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
+        self.outputLinearLayer = nn.Linear(2*self.featureCount, 1)
+        self.ReLU = nn.ReLU()
+
+        # LINEAR
+        # self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
+        # self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
+        # self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
+        # self.outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
+        # self.PReLU = nn.PReLU()
 
     # Define a forward pass of the network
-    def forward(self, previousObservation, observation, previousAction, action):
-        actionTensor = torch.tensor(action).float().requires_grad_(True)
-        observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
-        inputTensor = torch.cat((observationTensor, actionTensor),0)
-        # print(inputTensor)
-        inputTensor = inputTensor.view(1, -1)
-        # print(inputTensor)
-        # print(inputTensor.size())
-        # print(self.input_size)
-        # print("\n\n\n\n\n")
-
-        input = self.PReLU(self.inputLayer(inputTensor))
-        linear1 = self.PReLU(self.linearLayer1(input))
-        linear2 = self.PReLU(self.linearLayer2(linear1))
-        output = self.outputLinearLayer(linear2)
+    def forward(self, oldObservation, observation, oldAction, action):
+        # LSTM
+        inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
+        LSTMOutput, hiddenStates = self.LSTM(inputTensor)
+        LSTMOutput = LSTMOutput[1]
+        LSTMReLU = self.ReLU(LSTMOutput)
+        CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
+        linear = self.linearLayer(CReLU)
+        linearReLU = self.ReLU(linear)
+        CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
+        output = self.outputLinearLayer(CReLU2)
         return output[0]
+        
+        # LINEAR
+        # actionTensor = torch.tensor(action).float().requires_grad_(True)
+        # observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
+        # inputTensor = torch.cat((observationTensor, actionTensor),0)
+        # inputTensor = inputTensor.view(1, -1)
+        # input = self.PReLU(self.inputLayer(inputTensor))
+        # linear1 = self.PReLU(self.linearLayer1(input))
+        # linear2 = self.PReLU(self.linearLayer2(linear1))
+        # output = self.outputLinearLayer(linear2)
+        # return output[0]
 
     def getAction(self, game, observation):
         actions = game.getValidActions(ssg.DEFENDER)

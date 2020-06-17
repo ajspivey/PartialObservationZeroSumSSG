@@ -28,10 +28,13 @@ class AttackerOracle(nn.Module):
         self.observation_dim = targetNum * self.featureCount
         self.input_size = self.observation_dim + targetNum
 
+        # LSTM
         # self.LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
         # self.linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
         # self.outputLinearLayer = nn.Linear(2*self.featureCount, 1)
         # self.ReLU = nn.ReLU()
+        
+        # LINEAR
         self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
         self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
         self.linearLayer2 = nn.Linear(10*self.input_size*self.featureCount, self.input_size*self.featureCount)
@@ -40,6 +43,7 @@ class AttackerOracle(nn.Module):
 
     # Define a forward pass of the network
     def forward(self, oldObservation, observation, oldAction, action):
+        # LSTM
         # inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
         # LSTMOutput, hiddenStates = self.LSTM(inputTensor)
         # LSTMOutput = LSTMOutput[1]
@@ -50,6 +54,8 @@ class AttackerOracle(nn.Module):
         # CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
         # output = self.outputLinearLayer(CReLU2)
         # return output[0]
+
+        # LINEAR
         actionTensor = torch.tensor(action).float().requires_grad_(True)
         observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
         inputTensor = torch.cat((observationTensor, actionTensor),0)
