@@ -18,19 +18,13 @@ from baseline import getBaselineScore
 # CLASSES
 # ==============================================================================
 class DefenderOracle(nn.Module):
-    def __init__(self, targetNum, type="LSTM"):
+    def __init__(self, targetNum, type="Linear"):
         super(DefenderOracle, self).__init__()
         self.targetNum = targetNum
         self.featureCount = ssg.DEFENDER_FEATURE_SIZE
         self.observation_dim = targetNum * self.featureCount
         self.input_size = self.observation_dim + targetNum
         self.type=type
-
-        # LSTM
-        self.lstm_LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
-        self.lstm_linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
-        self.lstm_outputLinearLayer = nn.Linear(2*self.featureCount, 1)
-        self.lstm_ReLU = nn.ReLU()
 
         # LINEAR
         self.lin_inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
@@ -39,30 +33,36 @@ class DefenderOracle(nn.Module):
         self.lin_outputLinearLayer = nn.Linear(self.input_size*self.featureCount, 1)
         self.lin_PReLU = nn.PReLU()
 
+        # LSTM
+        self.lstm_LSTM = nn.LSTM(self.input_size, self.input_size*self.featureCount)
+        self.lstm_linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
+        self.lstm_outputLinearLayer = nn.Linear(2*self.featureCount, 1)
+        self.lstm_ReLU = nn.ReLU()
+
     # Define a forward pass of the network
     def forward(self, oldObservation, observation, oldAction, action):
-        # LSTM
-        if self.type == "LSTM":
-            inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
-            LSTMOutput, hiddenStates = self.lstm_LSTM(inputTensor)
-            LSTMOutput = LSTMOutput[1]
-            LSTMReLU = self.lstm_ReLU(LSTMOutput)
-            CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
-            linear = self.lstm_linearLayer(CReLU)
-            linearReLU = self.lstm_ReLU(linear)
-            CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
-            output = self.lstm_outputLinearLayer(CReLU2)
+        # LINEAR
+        if self.type == "Linear":
+            actionTensor = torch.tensor(action).float().requires_grad_(True)
+            observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
+            inputTensor = torch.cat((observationTensor, actionTensor),0)
+            inputTensor = inputTensor.view(1, -1)
+            input = self.lin_PReLU(self.lin_inputLayer(inputTensor))
+            linear1 = self.lin_PReLU(self.lin_linearLayer1(input))
+            linear2 = self.lin_PReLU(self.lin_linearLayer2(linear1))
+            output = self.lin_outputLinearLayer(linear2)
             return output[0]
 
-        # LINEAR
-        actionTensor = torch.tensor(action).float().requires_grad_(True)
-        observationTensor = torch.from_numpy(observation).float().requires_grad_(True)
-        inputTensor = torch.cat((observationTensor, actionTensor),0)
-        inputTensor = inputTensor.view(1, -1)
-        input = self.lin_PReLU(self.lin_inputLayer(inputTensor))
-        linear1 = self.lin_PReLU(self.lin_linearLayer1(input))
-        linear2 = self.lin_PReLU(self.lin_linearLayer2(linear1))
-        output = self.lin_outputLinearLayer(linear2)
+        # LSTM
+        inputTensor = getInputTensor(oldObservation, observation, oldAction, action)
+        LSTMOutput, hiddenStates = self.lstm_LSTM(inputTensor)
+        LSTMOutput = LSTMOutput[1]
+        LSTMReLU = self.lstm_ReLU(LSTMOutput)
+        CReLU = torch.cat((LSTMReLU, -LSTMReLU), 0).flatten().unsqueeze(0)
+        linear = self.lstm_linearLayer(CReLU)
+        linearReLU = self.lstm_ReLU(linear)
+        CReLU2 = torch.cat((linearReLU, -linearReLU), 0).flatten().unsqueeze(0)
+        output = self.lstm_outputLinearLayer(CReLU2)
         return output[0]
 
     def getAction(self, game, observation):

@@ -24,9 +24,9 @@ def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50,
         newDOracle.setState(parameters)
         lstm, lstmLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         writer.writerow([])
-        writer.writerow(["Linear"])
+        writer.writerow(["LSTM"])
         newDOracle.setState(parameters)
-        newDOracle.type = "Linear"
+        newDOracle.type = "LSTM"
         linear, linearLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         return lstm, lstmLoss, linear, linearLoss
     else:
@@ -36,9 +36,9 @@ def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50,
         newAOracle.setState(parameters)
         lstm, lstmLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         writer.writerow([])
-        writer.writerow(["Linear"])
+        writer.writerow(["LSTM"])
         newAOracle.setState(parameters)
-        newAOracle.type = "Linear"
+        newAOracle.type = "LSTM"
         linear, linearLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         return lstm, lstmLoss, linear, linearLoss
 
