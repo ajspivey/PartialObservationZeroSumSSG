@@ -33,7 +33,7 @@ class AttackerOracle(nn.Module):
         # self.linearLayer = nn.Linear(2*self.input_size*self.featureCount, self.featureCount)
         # self.outputLinearLayer = nn.Linear(2*self.featureCount, 1)
         # self.ReLU = nn.ReLU()
-        
+
         # LINEAR
         self.inputLayer = nn.Linear(self.input_size, self.input_size*self.featureCount)
         self.linearLayer1 = nn.Linear(self.input_size*self.featureCount, 10*self.input_size*self.featureCount)
@@ -140,8 +140,6 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
     if trainingTest:
         history = []
         lossHistory = []
-        equilibriumHistory = []
-        equilibriumScore = 0 #getBaselineScore(ssg.ATTACKER, dIds, dMap, dMix, gameClone, aPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -178,7 +176,6 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
                 oracleScore = ssg.expectedPureVMix(ssg.ATTACKER, oracleToTrain, dMap, dMix, gameClone)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
-                equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -187,5 +184,5 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
 
         game.restartGame()
     if trainingTest:
-        return history, lossHistory, equilibriumHistory
+        return history, lossHistory
     return ssg.expectedPureVMix(ssg.ATTACKER, oracleToTrain, dMap, dMix, gameClone)

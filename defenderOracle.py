@@ -136,8 +136,6 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize
     if trainingTest:
         history = []
         lossHistory = []
-        # equilibriumHistory = []
-        # equilibriumScore = 0#getBaselineScore(ssg.DEFENDER, aIds, aMap, aMix, gameClone, dPool)
 
     # Initialize the replay memory with limited capacity N
     replayMemory = ReplayMemory(N)
@@ -174,7 +172,6 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize
                 oracleScore = ssg.expectedPureVMix(ssg.DEFENDER, oracleToTrain, aMap, aMix, gameClone)
                 history.append(oracleScore)
                 lossHistory.append(avgLoss/batchSize)
-                equilibriumHistory.append(equilibriumScore)
             # Every C steps, set Q^ = Q
             step += 1
             if step == C:
@@ -183,5 +180,5 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize
 
         game.restartGame()
     if trainingTest:
-        return history, lossHistory, equilibriumHistory
+        return history, lossHistory
     return ssg.expectedPureVMix(ssg.DEFENDER, oracleToTrain, aMap, aMix, gameClone)
