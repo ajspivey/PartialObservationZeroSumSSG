@@ -39,9 +39,12 @@ def getInputTensor(oldObservation, observation, oldAction, action):
     newObservationTensor = torch.from_numpy(observation).float().requires_grad_(True)
 
     old = torch.cat((oldObservationTensor, oldActionTensor),0)
+    old = old.view(1, -1)
     new = torch.cat((newObservationTensor, newActionTensor),0)
+    new = new.view(1, -1)
+    inputTensor = torch.cat([old,new]).unsqueeze(1)
 
-    return torch.cat((old.unsqueeze(0), new.unsqueeze(0)))
+    return inputTensor
 
 # Learns from a batch in the replay memory and returns the average loss
 def sampleMinibatch(replayMemory, game, targetNetwork, oracleToTrain, lossFunction, optimizer, timestep, batchSize=15):
