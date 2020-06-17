@@ -22,25 +22,25 @@ def getTrainingGraph(player, game, ids, map, mix, pool, batchSize=15, epochs=50,
         parameters = bestDOracle.getState()
         newDOracle = DefenderOracle(game.numTargets)
         newDOracle.setState(parameters)
-        lstm, lstmLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        linear, linearLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         writer.writerow([])
         writer.writerow(["LSTM"])
         newDOracle.setState(parameters)
         newDOracle.type = "LSTM"
-        linear, linearLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
-        return lstm, lstmLoss, linear, linearLoss
+        lstm, lstmLoss = defenderTrain(newDOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        return linear, linearLoss, lstm, lstmLoss
     else:
         bestAOracle, bestAOracleUtility = game.getBestOracle(ssg.ATTACKER, ids, map, mix, pool)
         parameters = bestAOracle.getState()
         newAOracle = AttackerOracle(game.numTargets)
         newAOracle.setState(parameters)
-        lstm, lstmLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        linear, linearLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
         writer.writerow([])
         writer.writerow(["LSTM"])
         newAOracle.setState(parameters)
         newAOracle.type = "LSTM"
-        linear, linearLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
-        return lstm, lstmLoss, linear, linearLoss
+        lstm, lstmLoss = attackerTrain(newAOracle, ids, map, mix, game, pool, epochs=epochs, batchSize=batchSize, trainingTest=True, writer=writer)
+        return linear, linearLoss, lstm, lstmLoss
 
 def showGraphs(graphs):
     i = 1
@@ -91,23 +91,28 @@ def main():
     exportMixedStrategies = False
     # ---------------
     # HyperParameters
-    dEpochs = 200
-    aEpochs = 200
+    dEpochs = 100
+    aEpochs = 100
     seedingIterations = 20
     targetNum = 4
     resources = 2
     timesteps = 3
     # ---------------
+    # CREATE GAME
+    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
+    # ---------------
     # CSV stuffs
     csvFileAttacker = open("outputFiles/attackerTraining.csv", "w", newline='')
     csvWriterAttacker = csv.writer(csvFileAttacker, delimiter=',')
-    csvWriterAttacker.writerow(["iteration", "action list", "network estimate list", "action chosen"])
+    csvWriterAttacker.writerow(["defender rewards", "defender penalties"])
+    csvWriterAttacker.writerow([f"{game.defenderRewards}", f"{game.defenderPenalties}"])
+    csvWriterAttacker.writerow(["iteration", "action list", "network estimate list", "action chosen", "opponent action"])
     csvFileDefender = open("outputFiles/defenderTraining.csv", "w", newline='')
     csvWriterDefender = csv.writer(csvFileDefender, delimiter=',')
-    csvWriterDefender.writerow(["iteration", "action list", "network estimate list", "action chosen"])
+    csvWriterDefender.writerow(["defender rewards", "defender penalties"])
+    csvWriterDefender.writerow([f"{game.defenderRewards}", f"{game.defenderPenalties}"])
+    csvWriterDefender.writerow(["iteration", "action list", "network estimate list", "action chosen", "opponent action"])
     # ---------------
-    # CREATE GAME
-    game, defenderRewards, defenderPenalties = ssg.createRandomGame(targets=targetNum, resources=resources, timesteps=timesteps)
     print("Seeding Initial Strategies and Calculating Payout Matrix...")
     newDefenderId, newAttackerId, dIds, aIds, dMap, aMap = seedInitialPureStrategies(seedingIterations, targetNum)
     times.append(time.time())
@@ -121,12 +126,12 @@ def main():
     # ----------------------------------------------------------------------
     # Get the defender and attacker graphs
     print("Generating Training Graphs...")
-    dHistoryLSTM, dLossHistoryLSTM, dHistoryLinear, dLossHistoryLinear = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs, writer=csvWriterDefender)
-    aHistoryLSTM, aLossHistoryLSTM, aHistoryLinear, aLossHistoryLinear = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs, writer=csvWriterAttacker)
+    dHistoryLinear, dLossHistoryLinear, dHistoryLSTM, dLossHistoryLSTM  = getTrainingGraph(ssg.DEFENDER, game, aIds, aMap, aMix, dMap.values(), batchSize=100, epochs=dEpochs, writer=csvWriterDefender)
+    aHistoryLinear, aLossHistoryLinear, aHistoryLSTM, aLossHistoryLSTM  = getTrainingGraph(ssg.ATTACKER, game, dIds, dMap, dMix, aMap.values(), batchSize=50, epochs=aEpochs, writer=csvWriterAttacker)
     times.append(time.time())
     # Build the graphs
     print("Building and displaying Graphs...")
-    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistoryLSTM, dLossHistoryLSTM), (ssg.DEFENDER, dEpochs*timesteps, dHistoryLinear, dLossHistoryLinear), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLSTM, aLossHistoryLSTM), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLinear, aLossHistoryLinear)]
+    graphs = [(ssg.DEFENDER, dEpochs*timesteps, dHistoryLinear, dLossHistoryLinear), (ssg.DEFENDER, dEpochs*timesteps, dHistoryLSTM, dLossHistoryLSTM), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLinear, aLossHistoryLinear), (ssg.ATTACKER, aEpochs*timesteps, aHistoryLSTM, aLossHistoryLSTM)]
     # Show the graphs
     times.append(time.time())
     csvFileDefender.close()

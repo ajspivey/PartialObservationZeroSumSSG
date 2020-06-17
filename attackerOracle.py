@@ -132,9 +132,9 @@ class AttackerParameterizedSoftmax():
 # ==============================================================================
 # FUNCTIONS
 # ==============================================================================
-def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize=15, C=100, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False, writer=None):
+def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=300, batchSize=30, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False, writer=None):
     if optimizer is None:
-        optimizer = optim.Adam(oracleToTrain.parameters())
+        optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
     gameClone = ssg.cloneGame(game)
 
@@ -163,7 +163,7 @@ def attackerTrain(oracleToTrain, dIds, dMap, dMix, game, aPool, N=100, batchSize
             aAction = oracleToTrain.getAction(game, aOb)
 
             if trainingTest:
-                writer.writerow([f"{(timestep+1)+(game.timesteps*(epoch))}", f"{game.getValidActions(ssg.ATTACKER)}", f"{[oracleToTrain.forward(game.previousAttackerObservation, aOb, game.previousAttackerAction, x).item() for x in game.getValidActions(ssg.ATTACKER)]}", f"{aAction}"])
+                writer.writerow([f"{(timestep+1)+(game.timesteps*(epoch))}", f"{game.getValidActions(ssg.ATTACKER)}", f"{[oracleToTrain.forward(game.previousAttackerObservation, aOb, game.previousAttackerAction, x).item() for x in game.getValidActions(ssg.ATTACKER)]}", f"{aAction}", f"{dAction}"])
 
             # Execute that action and store the result in replay memory
             ob0 = game.previousAttackerObservation

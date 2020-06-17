@@ -129,7 +129,7 @@ class DefenderParameterizedSoftmax():
 # FUNCTIONS
 # ==============================================================================
 # ------------------------------------------------------------------------------
-def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize=30, C=30, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False, writer=None):
+def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize=30, C=50, epochs=100, optimizer=None, lossFunction=nn.MSELoss(), showOutput=False, trainingTest=False, writer=None):
     if optimizer is None:
         optimizer = optim.Adam(oracleToTrain.parameters(), lr=0.00001)
         optim.lr_scheduler.ReduceLROnPlateau(optimizer)
@@ -160,7 +160,7 @@ def defenderTrain(oracleToTrain, aIds, aMap, aMix, game, dPool, N=300, batchSize
             aAction = attackerAgent.getAction(game, aOb)
 
             if trainingTest:
-                writer.writerow([f"{(timestep+1)+(game.timesteps*(epoch))}", f"{game.getValidActions(ssg.DEFENDER)}", f"{[oracleToTrain.forward(game.previousDefenderObservation, dOb, game.previousDefenderAction, x).item() for x in game.getValidActions(ssg.DEFENDER)]}", f"{dAction}"])
+                writer.writerow([f"{(timestep+1)+(game.timesteps*(epoch))}", f"{game.getValidActions(ssg.DEFENDER)}", f"{[oracleToTrain.forward(game.previousDefenderObservation, dOb, game.previousDefenderAction, x).item() for x in game.getValidActions(ssg.DEFENDER)]}", f"{dAction}", f"{aAction}"])
 
             # Execute that action and store the result in replay memory
             ob0 = game.previousDefenderObservation
